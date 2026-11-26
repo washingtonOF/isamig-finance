@@ -1,0 +1,79 @@
+name: Cora - Validacao de importacao somente leitura
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cora-readonly.yml']
+permissions:
+  contents: read
+jobs:
+  authentication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Consultar extratos e boletos sem publicar dados
+        shell: bash
+        env:
+          CORA_ENV: production
+          CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+          CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
+          CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
+        run: |
+          set -eu
+          umask 077
+          test -n "$CORA_CLIENT_ID" && test -n "$CORA_CERTIFICATE" && test -n "$CORA_PRIVATE_KEY" || { echo "Secrets ausentes"; exit 1; }
+          tempdir="$(mktemp -d)"
+          trap 'rm -rf "$tempdir"' EXIT
+          printf '%s\n' "$CORA_CERTIFICATE" > "$tempdir/cert.pem"
+          printf '%s\n' "$CORA_PRIVATE_KEY" > "$tempdir/key.pem"
+          export CORA_CERT_PATH="$tempdir/cert.pem"
+          export CORA_KEY_PATH="$tempdir/key.pem"
+          unset CORA_CERTIFICATE CORA_PRIVATE_KEY
+          python - <<'PY'
+          from cora_client import CoraClient
+          from urllib.error import HTTPError
+          try:
+              token = CoraClient()._access_token()
+              if not isinstance(token, str) or not token:
+                  raise ValueError("Invalid token")
+              print("Autenticacao PRODUCAO bem-sucedida.")
+          except HTTPError as exc:
+              print("Falha HTTP:", exc.code)
+              import json
+              try:
+                  body = json.loads(exc.read(16384))
+                  code = body.get("error") if isinstance(body, dict) else None
+                  allowed = {"invalid_client", "invalid_request", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope", "access_denied", "server_error"}
+                  print("Categoria OAuth:", code if isinstance(code, str) and code in allowed else "nao identificada")
+              except Exception:
+                  print("Resposta sem categoria OAuth reconhecida")
+              raise SystemExit(1) from None
+          except Exception as exc:
+              print("Falha de autenticacao:", type(exc).__name__)
+              raise SystemExit(1) from None
+          from datetime import date
+          from zoneinfo import ZoneInfo
+          from datetime import datetime
+          today = datetime.now(ZoneInfo("America/Fortaleza")).date()
+          start = today.replace(day=1).isoformat()
+          end = today.isoformat()
+          client = CoraClient()
+          failed = False
+          for label, query in (("Extratos", client.statement), ("Boletos", client.invoices)):
+              try:
+                  result = query(start, end)
+                  if not isinstance(result, (dict, list)):
+                      raise ValueError("Unexpected response")
+                  print(label + ": consulta GET bem-sucedida; resposta JSON recebida.")
+              except HTTPError as exc:
+                  print(label + ": HTTP", exc.code)
+                  failed = True
+              except Exception as exc:
+                  print(label + ": falha", type(exc).__name__)
+                  failed = True
+          if failed:
+              raise SystemExit(1)
+          PY
