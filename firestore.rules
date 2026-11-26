@@ -34,23 +34,7 @@ service cloud.firestore {
      && request.resource.data.keys().hasOnly(['payer','updatedBy','updatedAt'])
      && request.resource.data.keys().hasAll(['payer','updatedBy','updatedAt'])
      && request.resource.data.payer is string
-     && (request.resource.data.payer == '' || (request.resource.data.payer.matches('^[a-f0-9]{64} are written only by the trusted server identity (IAM).
-  match /finance_admin/{period} {
-   allow get: if master() || administrative();
-   allow list, write: if false;
-  }
-  match /finance_public/{period} {
-   allow get: if master() || approved();
-   allow list, write: if false;
-  }
-  match /finance_units/{u}/months/{period} {
-   allow get: if unitValid(u) && (master() || administrative() || own(u));
-   allow list, write: if false;
-  }
-  match /{document=**} { allow read, write: if false; }
- }
-}
-) && exists(/databases/$(database)/documents/cora_import_private/$(request.resource.data.payer))))
+     && (request.resource.data.payer == '' || (request.resource.data.payer.matches('^[a-f0-9]{64}$') && exists(/databases/$(database)/documents/cora_import_private/$(request.resource.data.payer))))
      && request.resource.data.updatedBy == request.auth.uid
      && request.resource.data.updatedAt == request.time;
    allow delete: if false;
