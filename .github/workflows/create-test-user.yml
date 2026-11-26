@@ -1,0 +1,36 @@
+name: Provision test account
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/create-test-user.yml'
+permissions:
+  contents: read
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'firebase-admin>=6,<8'
+      - env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import json, os, secrets
+          import firebase_admin
+          from firebase_admin import auth, credentials, firestore
+          info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+          if info.get("project_id") != "vinnas-del-mar-finance":
+              raise SystemExit("Wrong project")
+          firebase_admin.initialize_app(credentials.Certificate(info))
+          email = "washington.souza@grupoisamig.com.br"
+          try:
+              auth.get_user_by_email(email)
+              print("Account already exists; left unchanged.")
+          except auth.UserNotFoundError:
+              auth.create_user(email=email, password=secrets.token_urlsafe(32), display_name="Condômino Teste", email_verified=False)
+              print("Test authentication account created without apartment or access grant.")
+          PY
