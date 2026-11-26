@@ -124,7 +124,22 @@ jobs:
                   "financialImport": False,
                   "paginationValidated": True
               })
-              print("Cora e Firebase: conectividade integrada confirmada; nenhum dado financeiro publicado.")
+              # Publish only aggregate counts, never payer data or raw bank records.
+              period = today.strftime("%Y-%m")
+              payload = {
+                  "period": period,
+                  "coverageStart": start,
+                  "coverageEnd": end,
+                  "invoiceCounts": dict(counts, total=len(invoices)),
+                  "updatedAt": firestore.SERVER_TIMESTAMP,
+                  "scope": "invoice_query_period",
+                  "monetaryDataAvailable": False
+              }
+              batch = db.batch()
+              batch.set(db.collection("finance_admin").document(period), payload, merge=True)
+              batch.set(db.collection("finance_public").document(period), payload, merge=True)
+              batch.commit()
+              print("Firebase: totais de boletos publicados nas colecoes protegidas.")
           except Exception as exc:
               print("Firebase: falha", type(exc).__name__)
               raise SystemExit(1) from None
