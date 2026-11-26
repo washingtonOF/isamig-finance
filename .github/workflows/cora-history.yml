@@ -36,3 +36,5 @@ jobs:
           export CORA_KEY_PATH="$tempdir/key.pem"
           unset CORA_CERTIFICATE CORA_PRIVATE_KEY
           python cora_history.py
+
+# Retry historical import with corrected pagination adapter.
