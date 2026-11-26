@@ -96,6 +96,16 @@ jobs:
               entries = collect_pages(client.statement, start, end, "entries", 50)
               invoices = collect_pages(client.invoices, start, end, "items", 20)
               print("Paginacao validada: movimentacoes =", len(entries), "; boletos =", len(invoices))
+              from finance_classification import summarize_invoices
+              counts = summarize_invoices(invoices, today)
+              print("Classificacao de boletos: desconhecidos =", counts["unclassified"])
+              # Only recognized enum values are logged, never arbitrary bank text.
+              allowed_types = {"CREDIT","DEBIT","IN","OUT","INCOME","EXPENSE","PIX","TRANSFER","PAYMENT","BOLETO","REFUND"}
+              types = {str(row.get("type","")).upper() for row in entries}
+              print("Tipos reconhecidos:", sorted(types & allowed_types))
+              print("Tipos nao reconhecidos:", len(types - allowed_types))
+              if counts["unclassified"]:
+                  raise ValueError("Unmapped invoice status")
           except Exception as exc:
               print("Paginacao interrompida:", type(exc).__name__)
               raise SystemExit(1) from None
