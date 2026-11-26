@@ -9,15 +9,17 @@ def process(db):
         if data.get("processedAt"):
             continue
         result = resolve_registration(data.get("cpf"), residents)
-        # Keep identity and unit private until Master verifies the claimant.
-        db.collection("registration_review_private").document(claim.id).set({
+        batch = db.batch()
+        batch.set(db.collection("registration_review_private").document(claim.id), {
             "result": result,
             "processedAt": firestore.SERVER_TIMESTAMP,
         })
-        claim.reference.update({
+        # Identical public-facing status for every result; no CPF lookup oracle.
+        batch.update(claim.reference, {
             "processedAt": firestore.SERVER_TIMESTAMP,
-            "status": "awaiting_review" if result["status"] in ("matched", "review") else "not_accepted",
+            "status": "awaiting_review",
         })
+        batch.commit()
 
 if __name__ == "__main__":
     firebase_admin.initialize_app()
