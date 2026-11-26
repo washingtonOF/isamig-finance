@@ -1,0 +1,41 @@
+name: Firebase - Validacao de conexao
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/firebase-check.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Install SDK
+        run: python -m pip install 'google-cloud-firestore>=2.19,<3'
+      - name: Validate Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import os, json, uuid
+          from google.oauth2 import service_account
+          from google.cloud import firestore
+          try:
+              info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+              if info.get("project_id") != "vinnas-del-mar-finance":
+                  raise ValueError("Wrong project")
+              credentials = service_account.Credentials.from_service_account_info(info)
+              db = firestore.Client(project="vinnas-del-mar-finance", credentials=credentials)
+              ref = db.collection("integration_checks").document(uuid.uuid4().hex)
+              ref.create({"source":"github-actions","checkedAt":firestore.SERVER_TIMESTAMP})
+              try:
+                  if not ref.get().exists:
+                      raise RuntimeError("Read failed")
+              finally:
+                  ref.delete()
+              print("Firebase: autenticacao, gravacao, leitura e limpeza confirmadas.")
+          except Exception as exc:
+              print("Firebase: falha", type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
