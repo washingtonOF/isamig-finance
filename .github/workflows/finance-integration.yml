@@ -113,6 +113,15 @@ jobs:
               print("Campos monetarios boletos:", sorted(schemas))
               if invoices:
                   detail = client.invoice_details(invoices[0]["id"])
+                  # Inspect only fixed cadastral field names and types, never personal values.
+                  cadastral = {"customer","payer","name","document","cpf","cnpj","email","phone","telephone","address","street","number","district","city","state","zip_code","postal_code","contact","contacts","tax_id","identity","document_number"}
+                  def cadastral_shape(obj, depth=0):
+                      if depth > 5: return None
+                      if isinstance(obj, dict): return {k:cadastral_shape(v,depth+1) for k,v in obj.items() if k in cadastral}
+                      if isinstance(obj,list): return [cadastral_shape(obj[0],depth+1)] if obj else []
+                      return type(obj).__name__
+                  print("Estrutura cadastral lista:", json.dumps(cadastral_shape(invoices[0]),sort_keys=True))
+                  print("Estrutura cadastral detalhe:", json.dumps(cadastral_shape(detail),sort_keys=True))
                   print("Campos monetarios detalhe:", json.dumps(monetary_schema(detail),sort_keys=True))
               print("Classificacao de boletos: desconhecidos =", counts["unclassified"])
               # Only recognized enum values are logged, never arbitrary bank text.
