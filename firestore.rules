@@ -22,6 +22,15 @@ service cloud.firestore {
    allow update: if unitValid(u) && validResident(request.resource.data) && (master() || administrative() || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
    allow delete: if false;
   }
+  match /unit_access_preferences/{u} {
+   allow get, list: if master();
+   allow create, update: if master() && unitValid(u) && u != '204'
+     && request.resource.data.keys().hasAll(['role','updatedBy','updatedAt'])
+     && request.resource.data.keys().hasOnly(['role','updatedBy','updatedAt'])
+     && (request.resource.data.role == 'resident' || (request.resource.data.role == 'administrative' && u in ['101','201']))
+     && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+   allow delete: if false;
+  }
   // Imported payer records are private and immutable from browser clients.
   match /cora_import_private/{payer} {
    allow get, list: if master() || administrative();
