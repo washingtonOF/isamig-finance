@@ -91,6 +91,14 @@ jobs:
                   failed = True
           if failed:
               raise SystemExit(1)
+          from finance_pagination import collect_pages
+          try:
+              entries = collect_pages(client.statement, start, end, "entries", 50)
+              invoices = collect_pages(client.invoices, start, end, "items", 20)
+              print("Paginacao validada: movimentacoes =", len(entries), "; boletos =", len(invoices))
+          except Exception as exc:
+              print("Paginacao interrompida:", type(exc).__name__)
+              raise SystemExit(1) from None
           try:
               import os, json
               from google.oauth2 import service_account
@@ -103,7 +111,8 @@ jobs:
                   "checkedAt": firestore.SERVER_TIMESTAMP,
                   "statementQuery": True,
                   "invoiceQuery": True,
-                  "financialImport": False
+                  "financialImport": False,
+                  "paginationValidated": True
               })
               print("Cora e Firebase: conectividade integrada confirmada; nenhum dado financeiro publicado.")
           except Exception as exc:
