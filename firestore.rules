@@ -22,6 +22,11 @@ service cloud.firestore {
    allow update: if unitValid(u) && validResident(request.resource.data) && (master() || administrative() || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
    allow delete: if false;
   }
+  // Imported payer records are private and immutable from browser clients.
+  match /cora_import_private/{payer} {
+   allow get, list: if master() || administrative();
+   allow write: if false;
+  }
   // Financial projections are written only by the trusted server identity (IAM).
   match /finance_admin/{period} {
    allow get: if master() || administrative();
