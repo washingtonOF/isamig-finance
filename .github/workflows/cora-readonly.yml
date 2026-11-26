@@ -68,6 +68,18 @@ jobs:
                   if not isinstance(result, (dict, list)):
                       raise ValueError("Unexpected response")
                   print(label + ": consulta GET bem-sucedida; resposta JSON recebida.")
+                  # Only allowlisted schema labels, never values or arbitrary keys.
+                  allowed = {"items","data","content","invoices","transactions","entries","statement","total","totalPages","page","size","hasNext","next","id","status","amount","value","date","due_date","dueDate","created_at","paid_at","payment","customer","balance","type","description","direction","pagination"}
+                  def shape(obj, depth=0):
+                      if depth > 3:
+                          return type(obj).__name__
+                      if isinstance(obj, dict):
+                          return {k: shape(v, depth+1) for k,v in obj.items() if k in allowed}
+                      if isinstance(obj, list):
+                          return {"kind":"list","count":len(obj),"sample_schema":shape(obj[0],depth+1) if obj else None}
+                      return type(obj).__name__
+                  import json
+                  print(label + " schema: " + json.dumps(shape(result), ensure_ascii=True))
               except HTTPError as exc:
                   print(label + ": HTTP", exc.code)
                   failed = True
