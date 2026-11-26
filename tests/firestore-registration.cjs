@@ -15,6 +15,23 @@ const fs=require('node:fs');
  await assertFails(getDoc(doc(resident,'registration_review_private','resident')));
  await assertFails(setDoc(doc(resident,'registration_decisions','resident'),{decision:'approved',unit:'302'}));
  await assertFails(setDoc(doc(resident,'registration_claims','resident'),claim));
- console.log('7 registration authorization checks passed');
+ const master=env.authenticatedContext('master',{email:'washington.s.souza@gmail.com',email_verified:true,firebase:{sign_in_provider:'google.com'}}).firestore();
+ await env.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await setDoc(doc(db,'users','resident'),{email:'resident@example.com',name:'Test',role:'user',status:'pending'});
+  await setDoc(doc(db,'registration_review_private','resident'),{result:{status:'matched',unit:'302'}});
+  await setDoc(doc(db,'finance_units','302','months','2026-11'),{test:true});
+  await setDoc(doc(db,'finance_units','303','months','2026-11'),{test:true});
+ });
+ await assertSucceeds(getDoc(doc(master,'registration_review_private','resident')));
+ await assertFails(setDoc(doc(master,'users','resident'),{unit:'302',role:'resident',status:'approved'},{merge:true}));
+ await assertFails(setDoc(doc(master,'registration_decisions','resident'),{decision:'approved',unit:'204',decidedBy:'master',decidedAt:serverTimestamp()}));
+ await assertSucceeds(setDoc(doc(master,'registration_decisions','resident'),{decision:'approved',unit:'302',decidedBy:'master',decidedAt:serverTimestamp()}));
+ await assertFails(setDoc(doc(master,'users','resident'),{unit:'303',role:'resident',status:'approved'},{merge:true}));
+ await assertSucceeds(setDoc(doc(master,'users','resident'),{unit:'302',role:'resident',status:'approved'},{merge:true}));
+ await assertSucceeds(getDoc(doc(resident,'finance_units','302','months','2026-11')));
+ await assertFails(getDoc(doc(resident,'finance_units','303','months','2026-11')));
+ await assertFails(setDoc(doc(resident,'finance_units','302','months','2026-11'),{test:false}));
+ console.log('16 registration authorization checks passed');
  }finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1});
