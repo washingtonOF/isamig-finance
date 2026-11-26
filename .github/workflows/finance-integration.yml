@@ -9,7 +9,7 @@ permissions:
 jobs:
   authentication:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -167,20 +167,23 @@ jobs:
               print("Firebase: totais financeiros publicados.")
               # Stage only current-period payer candidates; never overwrite local registrations.
               import hashlib
-              from resident_registry import identify_unit
               candidates = {}
               import time
               for index, invoice in enumerate(invoices, 1):
                   for attempt in range(4):
                       try:
-                          time.sleep(1)
+                          time.sleep(5)
                           detail = client.invoice_details(invoice["id"])
                           break
                       except HTTPError as exc:
                           print("Cora detalhe: HTTP", exc.code, "item", index, "tentativa", attempt + 1)
                           if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
                               raise SystemExit(1) from None
-                          time.sleep(2 ** (attempt + 1))
+                          retry_after = exc.headers.get("Retry-After", "") if exc.headers else ""
+                          delay = int(retry_after) if retry_after.isdigit() else (60 if exc.code == 429 else 2 ** (attempt + 1))
+                          if delay > 300:
+                              raise SystemExit(1) from None
+                          time.sleep(max(5, delay))
                   customer = detail.get("customer")
                   if not isinstance(customer, dict):
                       continue
@@ -192,14 +195,13 @@ jobs:
                   digits = "".join(ch for ch in identity if ch in "0123456789")
                   if len(digits) not in (11, 14):
                       continue
-                  unit = identify_unit(name)
-                  key = hashlib.sha256((digits + ":" + (unit or "")).encode()).hexdigest()
+                  key = hashlib.sha256(digits.encode()).hexdigest()
                   email = customer.get("email")
                   phone = customer.get("telephone")
                   candidates[key] = {"name": name.strip(), "document": digits,
                       "email": email if isinstance(email, str) else "",
                       "phone": phone if isinstance(phone, str) else "",
-                      "suggestedUnit": unit, "source": "cora",
+                      "suggestedUnit": None, "source": "cora",
                       "status": "pending_review", "importedAt": firestore.SERVER_TIMESTAMP}
               if len(candidates) > 450:
                   raise ValueError("Candidate batch limit")
