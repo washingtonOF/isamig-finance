@@ -163,6 +163,44 @@ jobs:
               batch = db.batch()
               batch.set(db.collection("finance_admin").document(period), payload, merge=True)
               batch.set(db.collection("finance_public").document(period), payload, merge=True)
+              # Stage only current-period payer candidates; never overwrite local registrations.
+              import hashlib
+              from resident_registry import identify_unit
+              candidates = {}
+              for invoice in invoices:
+                  detail = client.invoice_details(invoice["id"])
+                  customer = detail.get("customer")
+                  if not isinstance(customer, dict):
+                      continue
+                  name = customer.get("name")
+                  document = customer.get("document")
+                  identity = document.get("identity") if isinstance(document, dict) else None
+                  if not isinstance(name, str) or not name.strip() or not isinstance(identity, str):
+                      continue
+                  digits = "".join(ch for ch in identity if ch in "0123456789")
+                  if len(digits) not in (11, 14):
+                      continue
+                  unit = identify_unit(name)
+                  key = hashlib.sha256((digits + ":" + (unit or "")).encode()).hexdigest()
+                  email = customer.get("email")
+                  phone = customer.get("telephone")
+                  candidates[key] = {"name": name.strip(), "document": digits,
+                      "email": email if isinstance(email, str) else "",
+                      "phone": phone if isinstance(phone, str) else "",
+                      "suggestedUnit": unit, "source": "cora",
+                      "status": "pending_review", "importedAt": firestore.SERVER_TIMESTAMP}
+              if len(candidates) > 450:
+                  raise ValueError("Candidate batch limit")
+              # Private staging collection: existing records and review decisions are preserved.
+              created = 0
+              from google.api_core.exceptions import AlreadyExists
+              for key, candidate in candidates.items():
+                  try:
+                      db.collection("cora_import_private").document(key).create(candidate)
+                      created += 1
+                  except AlreadyExists:
+                      pass
+              print("Cadastro: candidatos distintos =", len(candidates), "; novos =", created)
               batch.commit()
               print("Firebase: totais de boletos publicados nas colecoes protegidas.")
           except Exception as exc:
