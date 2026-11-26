@@ -22,6 +22,19 @@ service cloud.firestore {
    allow update: if unitValid(u) && validResident(request.resource.data) && (master() || (administrative() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt'])) || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
    allow delete: if false;
   }
+  // Financial projections are written only by the trusted server identity (IAM).
+  match /finance_admin/{period} {
+   allow get: if master() || administrative();
+   allow list, write: if false;
+  }
+  match /finance_public/{period} {
+   allow get: if master() || approved();
+   allow list, write: if false;
+  }
+  match /finance_units/{u}/months/{period} {
+   allow get: if unitValid(u) && (master() || administrative() || own(u));
+   allow list, write: if false;
+  }
   match /{document=**} { allow read, write: if false; }
  }
 }
