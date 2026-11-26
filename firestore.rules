@@ -10,8 +10,11 @@ service cloud.firestore {
    allow get: if master() || (verified() && request.auth.uid == uid);
    allow list: if master();
    allow create: if verified() && request.auth.uid == uid
-     && request.resource.data.keys().hasOnly(['cpf','createdAt'])
-     && request.resource.data.keys().hasAll(['cpf','createdAt'])
+     && request.resource.data.keys().hasOnly(['cpf','phone','whatsapp','email','createdAt'])
+     && request.resource.data.keys().hasAll(['cpf','phone','whatsapp','email','createdAt'])
+     && request.resource.data.phone is string && request.resource.data.phone.matches('^[0-9]{10,13}$')
+     && request.resource.data.whatsapp is bool
+     && request.resource.data.email == request.auth.token.email
      && request.resource.data.cpf is string
      && request.resource.data.cpf.matches('^[0-9]{11}$')
      && request.resource.data.createdAt == request.time;
