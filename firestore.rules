@@ -6,22 +6,6 @@ service cloud.firestore {
   function unitValid(u) { return u in ['101','102','103','104','201','202','203','204','301','302','303','304','401','402','403','404','501','502','503','504','601','602']; }
   function validAssignment(d) { return unitValid(d.unit) && d.unit != '204' && ((d.role == 'administrative' && d.unit in ['101','201']) || d.role == 'resident'); }
   // Registration requests are private and resolved by a trusted service.
-  match /activation_tokens/{unit} {
-   allow get, list: if master();
-   allow create, update: if master() && unitValid(unit) && unit != '204'
-     && exists(/databases/$(database)/documents/residents/$(unit))
-     && request.resource.data.keys().hasOnly(['tokenHash','cpf','unit','expiresAt','used','issuedBy','issuedAt'])
-     && request.resource.data.keys().hasAll(['tokenHash','cpf','unit','expiresAt','used','issuedBy','issuedAt'])
-     && request.resource.data.tokenHash.matches('^[a-f0-9]{64}$')
-     && request.resource.data.cpf.matches('^[0-9]{11}$')
-     && request.resource.data.unit == unit
-     && request.resource.data.used == false
-     && request.resource.data.issuedBy == request.auth.uid
-     && request.resource.data.issuedAt == request.time
-     && request.resource.data.expiresAt > request.time
-     && request.resource.data.expiresAt <= request.time + duration.value(48,'h');
-   allow delete: if master();
-  }
   match /registration_claims/{uid} {
    allow get: if master() || (verified() && request.auth.uid == uid);
    allow list: if master();
@@ -69,6 +53,10 @@ service cloud.firestore {
   function administrative() { return approved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrative'; }
   function own(u) { return approved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.unit == u; }
   function validResident(d) { return d.keys().hasAll(['owner','responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt']) && d.keys().hasOnly(['owner','responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt']) && d.owner is string && d.owner.size() <= 150 && d.responsible is string && d.responsible.size() <= 150 && d.cpf is string && d.cpf.size() <= 14 && d.phone is string && d.phone.size() <= 30 && d.email is string && d.email.size() <= 254 && d.occupation in ['Não informado','Proprietário residente','Inquilino','Cedido','Desocupado'] && d.count is int && d.count >= 0 && d.count <= 100 && d.start is string && d.start.size() <= 10 && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
+  match /resident_contact_preferences/{u} {
+   allow get: if unitValid(u) && (master() || administrative() || own(u));
+   allow list, write: if false;
+  }
   match /residents/{u} {
    allow get: if unitValid(u) && (master() || administrative() || own(u));
    allow list: if master() || administrative();
