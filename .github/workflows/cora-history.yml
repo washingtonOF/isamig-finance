@@ -1,0 +1,38 @@
+name: Cora - Importacao historica
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cora-history.yml']
+permissions:
+  contents: read
+concurrency:
+  group: cora-history
+  cancel-in-progress: false
+jobs:
+  history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python -m pip install 'google-cloud-firestore>=2.19,<3'
+      - name: Importar historico somente leitura
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          CORA_ENV: production
+          CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+          CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
+          CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
+        run: |
+          set -eu
+          umask 077
+          tempdir="$(mktemp -d)"
+          trap 'rm -rf "$tempdir"' EXIT
+          printf '%s\n' "$CORA_CERTIFICATE" > "$tempdir/cert.pem"
+          printf '%s\n' "$CORA_PRIVATE_KEY" > "$tempdir/key.pem"
+          export CORA_CERT_PATH="$tempdir/cert.pem"
+          export CORA_KEY_PATH="$tempdir/key.pem"
+          unset CORA_CERTIFICATE CORA_PRIVATE_KEY
+          python cora_history.py
