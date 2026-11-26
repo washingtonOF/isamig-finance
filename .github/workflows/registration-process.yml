@@ -1,6 +1,11 @@
 name: Registration - Private processing
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/registration-process.yml'
+  schedule:
+    - cron: '17 * * * *'
 permissions:
   contents: read
 concurrency:
@@ -25,13 +30,15 @@ jobs:
           import os, json
           import firebase_admin
           from firebase_admin import credentials, firestore
-          from registration_processor import process
+          from registration_processor import process, process_approved_contacts
           try:
               info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
               if info.get("project_id") != "vinnas-del-mar-finance":
                   raise ValueError("Wrong project")
               firebase_admin.initialize_app(credentials.Certificate(info))
-              process(firestore.client())
+              db = firestore.client()
+              process(db)
+              process_approved_contacts(db)
               print("Registration processing completed.")
           except Exception as exc:
               print("Registration processing failed:", type(exc).__name__)
