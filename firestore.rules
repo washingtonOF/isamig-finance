@@ -5,7 +5,7 @@ service cloud.firestore {
   function master() { return verified() && request.auth.token.email == 'washington.s.souza@gmail.com' && request.auth.token.firebase.sign_in_provider == 'google.com'; }
   function unitValid(u) { return u in ['101','102','103','104','201','202','203','204','301','302','303','304','401','402','403','404','501','502','503','504','601','602']; }
   function validAssignment(d) { return unitValid(d.unit) && ((d.role == 'administrative' && d.unit in ['101','201']) || d.role == 'resident'); }
-  // CPF claims are private; only a trusted server may resolve them to units.
+  // Registration requests are private and resolved by a trusted service.
   match /registration_claims/{uid} {
    allow get: if master() || (verified() && request.auth.uid == uid);
    allow list: if master();
@@ -13,66 +13,7 @@ service cloud.firestore {
      && request.resource.data.keys().hasOnly(['cpf','createdAt'])
      && request.resource.data.keys().hasAll(['cpf','createdAt'])
      && request.resource.data.cpf is string
-     && request.resource.data.cpf.matches('^[0-9]{11}
-   allow read: if master() || (verified() && request.auth.uid == uid);
-   allow create: if verified() && request.auth.uid == uid && request.resource.data.keys().hasOnly(['email','name','role','status']) && request.resource.data.email == request.auth.token.email && request.resource.data.name is string && request.resource.data.role == 'user' && request.resource.data.status == 'pending';
-   allow update: if master() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unit','role','status']) && ((request.resource.data.status == 'approved' && validAssignment(request.resource.data)) || request.resource.data.status == 'revoked');
-   allow delete: if false;
-  }
-  function approved() { return verified() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved' && validAssignment(get(/databases/$(database)/documents/users/$(request.auth.uid)).data); }
-  function administrative() { return approved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrative'; }
-  function own(u) { return approved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.unit == u; }
-  function validResident(d) { return d.keys().hasAll(['owner','responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt']) && d.keys().hasOnly(['owner','responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt']) && d.owner is string && d.owner.size() <= 150 && d.responsible is string && d.responsible.size() <= 150 && d.cpf is string && d.cpf.size() <= 14 && d.phone is string && d.phone.size() <= 30 && d.email is string && d.email.size() <= 254 && d.occupation in ['Não informado','Proprietário residente','Inquilino','Cedido','Desocupado'] && d.count is int && d.count >= 0 && d.count <= 100 && d.start is string && d.start.size() <= 10 && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
-  match /residents/{u} {
-   allow get: if unitValid(u) && (master() || administrative() || own(u));
-   allow list: if master() || administrative();
-   allow create: if unitValid(u) && (master() || administrative()) && validResident(request.resource.data);
-   allow update: if unitValid(u) && validResident(request.resource.data) && (master() || administrative() || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
-   allow delete: if false;
-  }
-  match /unit_access_preferences/{u} {
-   allow get, list: if master();
-   allow create, update: if master() && unitValid(u) && u != '204'
-     && request.resource.data.keys().hasAll(['role','updatedBy','updatedAt'])
-     && request.resource.data.keys().hasOnly(['role','updatedBy','updatedAt'])
-     && (request.resource.data.role == 'resident' || (request.resource.data.role == 'administrative' && u in ['101','201']))
-     && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
-   allow delete: if false;
-  }
-  // Imported payer records are private and immutable from browser clients.
-  match /cora_import_private/{payer} {
-   allow get, list: if master() || administrative();
-   allow write: if false;
-  }
-  match /unit_payer_links/{u} {
-   allow get: if unitValid(u) && (master() || administrative());
-   allow list: if master() || administrative();
-   allow create, update: if unitValid(u) && (master() || administrative())
-     && request.resource.data.keys().hasOnly(['payer','updatedBy','updatedAt'])
-     && request.resource.data.keys().hasAll(['payer','updatedBy','updatedAt'])
-     && request.resource.data.payer is string
-     && (request.resource.data.payer == '' || (request.resource.data.payer.matches('^[a-f0-9]{64}$') && exists(/databases/$(database)/documents/cora_import_private/$(request.resource.data.payer))))
-     && request.resource.data.updatedBy == request.auth.uid
-     && request.resource.data.updatedAt == request.time;
-   allow delete: if false;
-  }
-  // Financial projections are written only by the trusted server identity (IAM).
-  match /finance_admin/{period} {
-   allow get: if master() || administrative();
-   allow list, write: if false;
-  }
-  match /finance_public/{period} {
-   allow get: if master() || approved();
-   allow list, write: if false;
-  }
-  match /finance_units/{u}/months/{period} {
-   allow get: if unitValid(u) && (master() || administrative() || own(u));
-   allow list, write: if false;
-  }
-  match /{document=**} { allow read, write: if false; }
- }
-}
-)
+     && request.resource.data.cpf.matches('^[0-9]{11}$')
      && request.resource.data.createdAt == request.time;
    allow update, delete: if false;
   }
