@@ -17,6 +17,21 @@ service cloud.firestore {
      && request.resource.data.createdAt == request.time;
    allow update, delete: if false;
   }
+  match /registration_decisions/{uid} {
+   allow get, list: if master();
+   allow create: if master()
+     && request.resource.data.keys().hasAll(['decision','unit','decidedBy','decidedAt'])
+     && request.resource.data.keys().hasOnly(['decision','unit','decidedBy','decidedAt'])
+     && exists(/databases/$(database)/documents/registration_review_private/$(uid))
+     && request.resource.data.decidedBy == request.auth.uid
+     && request.resource.data.decidedAt == request.time
+     && ((request.resource.data.decision == 'rejected' && request.resource.data.unit == '')
+       || (request.resource.data.decision == 'approved' && unitValid(request.resource.data.unit)
+       && request.resource.data.unit != '204'
+       && get(/databases/$(database)/documents/registration_review_private/$(uid)).data.result.status == 'matched'
+       && get(/databases/$(database)/documents/registration_review_private/$(uid)).data.result.unit == request.resource.data.unit));
+   allow update, delete: if false;
+  }
   match /registration_review_private/{uid} {
    allow get, list: if master();
    allow write: if false;
