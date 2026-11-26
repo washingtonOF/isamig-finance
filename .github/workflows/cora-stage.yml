@@ -39,6 +39,14 @@ jobs:
               print("Autenticacao STAGE bem-sucedida.")
           except HTTPError as exc:
               print("Falha HTTP:", exc.code)
+              import json
+              try:
+                  body = json.loads(exc.read(16384))
+                  code = body.get("error") if isinstance(body, dict) else None
+                  allowed = {"invalid_client", "invalid_request", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope", "access_denied", "server_error"}
+                  print("Categoria OAuth:", code if isinstance(code, str) and code in allowed else "nao identificada")
+              except Exception:
+                  print("Resposta sem categoria OAuth reconhecida")
               raise SystemExit(1) from None
           except Exception as exc:
               print("Falha de autenticacao:", type(exc).__name__)
