@@ -14,11 +14,11 @@ def main():
     db=firestore.Client(project=info["project_id"],credentials=service_account.Credentials.from_service_account_info(info))
     client=CoraClient()
     today=datetime.now(ZoneInfo("America/Fortaleza")).date()
-    def retry(fn,*args):
+    def retry(fn,*args,**kwargs):
         for attempt in range(5):
             try:
                 time.sleep(5)
-                return fn(*args)
+                return fn(*args,**kwargs)
             except HTTPError as e:
                 if e.code not in (429,500,502,503,504) or attempt==4: raise
                 header=e.headers.get("Retry-After","") if e.headers else ""
@@ -32,7 +32,7 @@ def main():
         period=start.strftime("%Y-%m")
         checkpoint=db.collection("cora_history_progress").document(period)
         if not checkpoint.get().exists or month==today.month and year==today.year:
-            rows=collect_pages(lambda *args:retry(client.invoices,*args),start.isoformat(),end.isoformat(),"items",20)
+            rows=collect_pages(lambda *args,**kwargs:retry(client.invoices,*args,**kwargs),start.isoformat(),end.isoformat(),"items",20)
             created=0
             for row in rows:
                 key=hashlib.sha256(row["id"].encode()).hexdigest()
