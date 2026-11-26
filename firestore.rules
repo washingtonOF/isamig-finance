@@ -4,7 +4,7 @@ service cloud.firestore {
   function verified() { return request.auth != null && request.auth.token.email_verified == true; }
   function master() { return verified() && request.auth.token.email == 'washington.s.souza@gmail.com' && request.auth.token.firebase.sign_in_provider == 'google.com'; }
   function unitValid(u) { return u in ['101','102','103','104','201','202','203','204','301','302','303','304','401','402','403','404','501','502','503','504','601','602']; }
-  function validAssignment(d) { return unitValid(d.unit) && ((d.role == 'administrative' && d.unit in ['101','201']) || d.role == 'resident'); }
+  function validAssignment(d) { return unitValid(d.unit) && d.unit != '204' && ((d.role == 'administrative' && d.unit in ['101','201']) || d.role == 'resident'); }
   // Registration requests are private and resolved by a trusted service.
   match /registration_claims/{uid} {
    allow get: if master() || (verified() && request.auth.uid == uid);
@@ -16,6 +16,10 @@ service cloud.firestore {
      && request.resource.data.cpf.matches('^[0-9]{11}$')
      && request.resource.data.createdAt == request.time;
    allow update, delete: if false;
+  }
+  match /registration_review_private/{uid} {
+   allow get, list: if master();
+   allow write: if false;
   }
   match /users/{uid} {
    allow read: if master() || (verified() && request.auth.uid == uid);
