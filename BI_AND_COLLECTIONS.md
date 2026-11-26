@@ -1,0 +1,3 @@
+# BI e cobranças
+
+Protótipo exclusivamente simulado. API de relatório JSON e CSV para futura integração com Power BI e Google Sheets. Não publicar dados reais em URLs públicas. Em produção, usar autenticação, HTTPS, credenciais de serviço e atualização agendada conforme licenças e conectores. Google Sheets deve ter acesso restrito. WhatsApp exige provedor oficial, consentimento e modelos aprovados quando aplicável; e-mail exige remetente autorizado. Antes de enviar, consultar situação bancária atual, registrar idempotência por boleto/evento/canal, respeitar preferências, evitar exposição de dívida a terceiros e interromper após pagamento. Nenhum envio real habilitado. A confirmação de pagamento requer eventos persistidos e conciliação, ainda não implementados.
