@@ -1,6 +1,7 @@
 import firebase_admin
 from firebase_admin import firestore
 from registration_validation import resolve_registration
+from registration_contacts import apply_contacts
 
 def process(db):
     residents = {doc.id: doc.to_dict() for doc in db.collection("residents").stream()}
@@ -21,6 +22,12 @@ def process(db):
         })
         batch.commit()
 
+def process_approved_contacts(db):
+    for decision in db.collection("registration_decisions").where("decision", "==", "approved").stream():
+        apply_contacts(db.transaction(), db, decision.id)
+
 if __name__ == "__main__":
     firebase_admin.initialize_app()
-    process(firestore.client())
+    db = firestore.client()
+    process(db)
+    process_approved_contacts(db)
