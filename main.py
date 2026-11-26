@@ -2,6 +2,15 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, StreamingResponse
 from datetime import date, timedelta
 from io import BytesIO
+from pathlib import Path
+from base64 import b64decode
+from openpyxl.drawing.image import Image as ExcelImage
+from reportlab.platypus import Image as PDFImage
+from reportlab.lib.utils import ImageReader
+from openpyxl.styles import Font, PatternFill
+
+def logo_bytes():
+    return BytesIO(b64decode(Path(__file__).with_name('vinnas_logo.b64').read_text()))
 from openpyxl import Workbook
 from reportlab.platypus import SimpleDocTemplate, Table, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
@@ -21,7 +30,20 @@ def excel():
     wb=Workbook()
     ws=wb.active
     ws.title="Dados ficticios"
+    ws.merge_cells("A1:D1")
+    ws["A1"]="Condomínio Vinnas Del Mar — Dados fictícios"
+    ws["A1"].font=Font(bold=True,size=14,color="102343")
+    logo=ExcelImage(logo_bytes())
+    ratio= min(240/logo.width, 120/logo.height)
+    logo.width=int(logo.width*ratio); logo.height=int(logo.height*ratio)
+    ws.add_image(logo,"A2")
+    for n in range(2,9): ws.row_dimensions[n].height=16
+    ws["A9"]="Emissão: "+date.today().isoformat()
     ws.append(["Unidade","Valor (R$)","Status","Vencimento"])
+    for cell in ws[10]:
+        cell.fill=PatternFill("solid",fgColor="102343"); cell.font=Font(color="FFFFFF",bold=True)
+    for col in "ABCD": ws.column_dimensions[col].width=23
+    ws.freeze_panes="A11"
     for r in boletos():
         ws.append([r["unidade"],r["valor_centavos"]/100,r["status"],r["vencimento"]])
     out=BytesIO()
@@ -32,7 +54,11 @@ def excel():
 def pdf():
     out=BytesIO()
     rows=[["Unidade","Valor (R$)","Status","Vencimento"]]+[[r["unidade"],str(r["valor_centavos"]/100),r["status"],r["vencimento"]] for r in boletos()]
-    SimpleDocTemplate(out).build([Paragraph("IsaMig Finance - Dados ficticios",getSampleStyleSheet()["Title"]),Table(rows,repeatRows=1)])
+    logo=PDFImage(logo_bytes())
+    ratio=min(240/logo.imageWidth,130/logo.imageHeight)
+    logo.drawWidth=logo.imageWidth*ratio; logo.drawHeight=logo.imageHeight*ratio
+    styles=getSampleStyleSheet()
+    SimpleDocTemplate(out).build([logo,Paragraph("Condomínio Vinnas Del Mar",styles["Title"]),Paragraph("Relatório de boletos — Dados fictícios | Emissão: "+date.today().isoformat(),styles["Normal"]),Table(rows,repeatRows=1)])
     out.seek(0)
     return StreamingResponse(out,media_type="application/pdf",headers={"Content-Disposition":"attachment; filename=simulacao.pdf"})
 @app.get("/",response_class=HTMLResponse)
