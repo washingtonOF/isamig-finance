@@ -1,0 +1,46 @@
+name: Cora - Teste de autenticacao
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authentication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Testar autenticacao STAGE
+        shell: bash
+        env:
+          CORA_ENV: stage
+          CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+          CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
+          CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
+        run: |
+          set -eu
+          umask 077
+          test -n "$CORA_CLIENT_ID" && test -n "$CORA_CERTIFICATE" && test -n "$CORA_PRIVATE_KEY" || { echo "Secrets ausentes"; exit 1; }
+          tempdir="$(mktemp -d)"
+          trap 'rm -rf "$tempdir"' EXIT
+          printf '%s\n' "$CORA_CERTIFICATE" > "$tempdir/cert.pem"
+          printf '%s\n' "$CORA_PRIVATE_KEY" > "$tempdir/key.pem"
+          export CORA_CERT_PATH="$tempdir/cert.pem"
+          export CORA_KEY_PATH="$tempdir/key.pem"
+          unset CORA_CERTIFICATE CORA_PRIVATE_KEY
+          python - <<'PY'
+          from cora_client import CoraClient
+          from urllib.error import HTTPError
+          try:
+              token = CoraClient()._access_token()
+              if not isinstance(token, str) or not token:
+                  raise ValueError("Invalid token")
+              print("Autenticacao STAGE bem-sucedida.")
+          except HTTPError as exc:
+              print("Falha HTTP:", exc.code)
+              raise SystemExit(1) from None
+          except Exception as exc:
+              print("Falha de autenticacao:", type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
