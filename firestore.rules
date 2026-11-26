@@ -18,8 +18,8 @@ service cloud.firestore {
   match /residents/{u} {
    allow get: if unitValid(u) && (master() || administrative() || own(u));
    allow list: if master() || administrative();
-   allow create: if unitValid(u) && master() && validResident(request.resource.data);
-   allow update: if unitValid(u) && validResident(request.resource.data) && (master() || (administrative() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt'])) || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
+   allow create: if unitValid(u) && (master() || administrative()) && validResident(request.resource.data);
+   allow update: if unitValid(u) && validResident(request.resource.data) && (master() || administrative() || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
    allow delete: if false;
   }
   // Financial projections are written only by the trusted server identity (IAM).
