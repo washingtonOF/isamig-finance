@@ -98,6 +98,22 @@ jobs:
               print("Paginacao validada: movimentacoes =", len(entries), "; boletos =", len(invoices))
               from finance_classification import summarize_invoices
               counts = summarize_invoices(invoices, today)
+              # Inspect field names and types only; no amounts, identifiers or payer data.
+              monetary_fields = {"amount","value","total_amount","totalAmount","original_amount","originalAmount","paid_amount","paidAmount","payment_amount","paymentAmount","amount_paid","amountPaid","total","services","payments","payment","invoice","currency","balance"}
+              def monetary_schema(obj, depth=0):
+                  if depth > 4:
+                      return None
+                  if isinstance(obj, dict):
+                      return {k: monetary_schema(v, depth+1) for k,v in obj.items() if k in monetary_fields}
+                  if isinstance(obj, list):
+                      return [monetary_schema(obj[0],depth+1)] if obj else []
+                  return type(obj).__name__
+              import json
+              schemas = {json.dumps(monetary_schema(row),sort_keys=True) for row in invoices}
+              print("Campos monetarios boletos:", sorted(schemas))
+              if invoices:
+                  detail = client.invoice_details(invoices[0]["id"])
+                  print("Campos monetarios detalhe:", json.dumps(monetary_schema(detail),sort_keys=True))
               print("Classificacao de boletos: desconhecidos =", counts["unclassified"])
               # Only recognized enum values are logged, never arbitrary bank text.
               allowed_types = {"CREDIT","DEBIT","IN","OUT","INCOME","EXPENSE","PIX","TRANSFER","PAYMENT","BOLETO","REFUND"}
