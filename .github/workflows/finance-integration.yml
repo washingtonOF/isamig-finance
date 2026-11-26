@@ -9,7 +9,7 @@ permissions:
 jobs:
   authentication:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,12 +163,24 @@ jobs:
               batch = db.batch()
               batch.set(db.collection("finance_admin").document(period), payload, merge=True)
               batch.set(db.collection("finance_public").document(period), payload, merge=True)
+              batch.commit()
+              print("Firebase: totais financeiros publicados.")
               # Stage only current-period payer candidates; never overwrite local registrations.
               import hashlib
               from resident_registry import identify_unit
               candidates = {}
-              for invoice in invoices:
-                  detail = client.invoice_details(invoice["id"])
+              import time
+              for index, invoice in enumerate(invoices, 1):
+                  for attempt in range(4):
+                      try:
+                          time.sleep(1)
+                          detail = client.invoice_details(invoice["id"])
+                          break
+                      except HTTPError as exc:
+                          print("Cora detalhe: HTTP", exc.code, "item", index, "tentativa", attempt + 1)
+                          if exc.code not in (429, 500, 502, 503, 504) or attempt == 3:
+                              raise SystemExit(1) from None
+                          time.sleep(2 ** (attempt + 1))
                   customer = detail.get("customer")
                   if not isinstance(customer, dict):
                       continue
@@ -201,8 +213,7 @@ jobs:
                   except AlreadyExists:
                       pass
               print("Cadastro: candidatos distintos =", len(candidates), "; novos =", created)
-              batch.commit()
-              print("Firebase: totais de boletos publicados nas colecoes protegidas.")
+              print("Firebase: etapa cadastral concluida.")
           except Exception as exc:
               print("Firebase: falha", type(exc).__name__)
               raise SystemExit(1) from None
