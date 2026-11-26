@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function verified() { return request.auth != null && request.auth.token.email_verified == true; }
+  function master() { return verified() && request.auth.token.email == 'washington.s.souza@gmail.com' && request.auth.token.firebase.sign_in_provider == 'google.com'; }
+  function unitValid(u) { return u in ['101','102','103','104','201','202','203','204','301','302','303','304','401','402','403','404','501','502','503','504','601','602']; }
+  function validAssignment(d) { return unitValid(d.unit) && ((d.role == 'administrative' && d.unit in ['101','201']) || d.role == 'resident'); }
+  match /users/{uid} {
+   allow read: if master() || (verified() && request.auth.uid == uid);
+   allow create: if verified() && request.auth.uid == uid && request.resource.data.keys().hasOnly(['email','name','role','status']) && request.resource.data.email == request.auth.token.email && request.resource.data.name is string && request.resource.data.role == 'user' && request.resource.data.status == 'pending';
+   allow update: if master() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unit','role','status']) && ((request.resource.data.status == 'approved' && validAssignment(request.resource.data)) || request.resource.data.status == 'revoked');
+   allow delete: if false;
+  }
+  match /{document=**} { allow read, write: if false; }
+ }
+}
