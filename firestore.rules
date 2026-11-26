@@ -39,7 +39,11 @@ service cloud.firestore {
   match /users/{uid} {
    allow read: if master() || (verified() && request.auth.uid == uid);
    allow create: if verified() && request.auth.uid == uid && request.resource.data.keys().hasOnly(['email','name','role','status']) && request.resource.data.email == request.auth.token.email && request.resource.data.name is string && request.resource.data.role == 'user' && request.resource.data.status == 'pending';
-   allow update: if master() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unit','role','status']) && ((request.resource.data.status == 'approved' && validAssignment(request.resource.data)) || request.resource.data.status == 'revoked');
+   allow update: if master() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unit','role','status']) && ((request.resource.data.status == 'approved' && validAssignment(request.resource.data)
+     && ((resource.data.status == 'approved' && resource.data.unit == request.resource.data.unit)
+       || (exists(/databases/$(database)/documents/registration_decisions/$(uid))
+       && get(/databases/$(database)/documents/registration_decisions/$(uid)).data.decision == 'approved'
+       && get(/databases/$(database)/documents/registration_decisions/$(uid)).data.unit == request.resource.data.unit))) || request.resource.data.status == 'revoked');
    allow delete: if false;
   }
   function approved() { return verified() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved' && validAssignment(get(/databases/$(database)/documents/users/$(request.auth.uid)).data); }
