@@ -1,0 +1,27 @@
+name: Firestore rules validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - firestore.rules
+      - tests/firestore-registration.cjs
+      - .github/workflows/firestore-rules-test.yml
+permissions:
+  contents: read
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm install --no-save firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - run: |
+          printf '%s\n' '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"port":8080},"ui":{"enabled":false}}}' > firebase.test.json
+          npx firebase emulators:exec --config firebase.test.json --project demo-vinnas-registration --only firestore "node tests/firestore-registration.cjs"
