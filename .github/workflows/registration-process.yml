@@ -1,0 +1,39 @@
+name: Registration - Private processing
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: registration-private
+  cancel-in-progress: false
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'firebase-admin>=6,<8'
+      - run: python -m unittest -v test_registration_validation
+      - name: Process private claims
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import os, json
+          import firebase_admin
+          from firebase_admin import credentials, firestore
+          from registration_processor import process
+          try:
+              info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+              if info.get("project_id") != "vinnas-del-mar-finance":
+                  raise ValueError("Wrong project")
+              firebase_admin.initialize_app(credentials.Certificate(info))
+              process(firestore.client())
+              print("Registration processing completed.")
+          except Exception as exc:
+              print("Registration processing failed:", type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
