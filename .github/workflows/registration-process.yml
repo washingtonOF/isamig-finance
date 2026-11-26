@@ -31,12 +31,14 @@ jobs:
           import firebase_admin
           from firebase_admin import credentials, firestore
           from registration_processor import process, process_approved_contacts
+          from registration_auth_inventory import sync_auth_inventory
           try:
               info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
               if info.get("project_id") != "vinnas-del-mar-finance":
                   raise ValueError("Wrong project")
               firebase_admin.initialize_app(credentials.Certificate(info))
               db = firestore.client()
+              sync_auth_inventory(db)
               process(db)
               process_approved_contacts(db)
               print("Registration processing completed.")
