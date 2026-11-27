@@ -1,10 +1,11 @@
 """Pilot projection writer; requires explicit scope authorization before execution."""
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from google.cloud import firestore
 from resident_invoice_projection import project, payer_key
 from cora_client import CoraClient
 from resident_payment_validation import valid_pix
+from finance_classification import classify_invoice
 import time
 
 def sync(db, auth, confirmed_from, month):
@@ -34,7 +35,7 @@ def sync(db, auth, confirmed_from, month):
         services=detail.get("services") or []
         description="; ".join(str(x.get("name",""))[:255] for x in services if isinstance(x,dict))[:500]
         pix=(detail.get("pix") or {}).get("emv")
-        details[row["id"]]=(description,valid_pix(pix),detail.get("status"))
+        details[row["id"]]=(description,valid_pix(pix),detail.get("status"),detail.get("paid_at"),datetime.now(timezone.utc))
     print("Details checked:",len(details),"valid Pix:",sum(x[1] for x in details.values()))
     @firestore.transactional
     def write(transaction):
@@ -48,7 +49,16 @@ def sync(db, auth, confirmed_from, month):
         if len(selected)!=len(payload["invoices"]): raise ValueError("Projection mismatch")
         for row, bill in zip(selected,payload["invoices"]):
             if row["id"] not in details: raise ValueError("Missing detail")
-            bill["description"]=details[row["id"]][0]
+            description, pix_valid, status, paid_at, checked_at = details[row["id"]]
+            bill["description"]=description
+            if not isinstance(status,str): raise ValueError("Missing live status")
+            category=classify_invoice(status,row["due_date"],today)
+            if category=="unclassified":
+                bill["status"]="processing" if status.upper() in ("PROCESSING","IN_PAYMENT") else "unknown"
+            else:
+                bill["status"]=category
+            bill["paidDate"]=str(paid_at or "")[:10] if category=="paid" else ""
+            bill["bankCheckedAt"]=checked_at.isoformat()
         # No payment tokens are published until a freshness policy is implemented.
         payload["updatedAt"]=firestore.SERVER_TIMESTAMP
         transaction.set(db.collection("finance_units").document(unit).collection("months").document(month),payload)
