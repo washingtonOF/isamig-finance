@@ -9,7 +9,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     env:
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       CORA_ENV: production
@@ -59,6 +59,14 @@ jobs:
               print("Schema check blocked:",type(exc).__name__)
               raise SystemExit(1) from None
           import os
+          from finance_pagination import collect_pages
+          entries=collect_pages(CoraClient().statement,today.replace(day=1).isoformat(),today.isoformat(),"entries",50)
+          known={"BOLETO","PIX","TRANSFER","PAYMENT","INVOICE","BANK_SLIP","INTERNAL_TRANSFER","REFUND","CASH_IN","CASH_OUT","BILLET","INVOICE_PAYMENT","PIX_IN","PIX_OUT","BANK_SLIP_PAYMENT"}
+          groups=Counter()
+          for row in entries:
+              t=str(row['transaction'].get('type','')).upper()
+              groups[(row['type'],t if t in known else 'OTHER')]+=row['amount']
+          print('Movement reconciliation:',dict(groups))
           from google.oauth2 import service_account
           from google.cloud import firestore
           from statement_sync import sync_statement
