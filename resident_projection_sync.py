@@ -20,7 +20,7 @@ def sync(db, auth, confirmed_from, month):
         registry=db.collection("residents").document(unit).get(transaction=transaction).to_dict()
         links={s.id:s.to_dict() for s in db.collection("unit_payer_links").stream(transaction=transaction)}
         invoices=[s.to_dict() for s in db.collection("cora_invoice_private").where("payer","==",links[unit]["payer"]).stream(transaction=transaction)]
-        payload=project(unit,uid,account,registry,links[unit],links,invoices,month,today,confirmed_from,False)
+        payload=project(unit,uid,account,registry,links[unit],links,invoices,month,today,confirmed_from,True)
         payload["updatedAt"]=firestore.SERVER_TIMESTAMP
         transaction.set(db.collection("finance_units").document(unit).collection("months").document(month),payload)
     write(db.transaction())
