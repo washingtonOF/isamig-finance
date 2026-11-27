@@ -42,6 +42,13 @@ jobs:
                   if isinstance(v,list): return [shape(v[0],depth+1)] if v else []
                   return type(v).__name__
               print("Response schema:",json.dumps(shape(data),sort_keys=True))
+              known_keys={"date","created_at","createdAt","occurred_at","occurredAt","timestamp","entry_date","entryDate","transaction_date","transactionDate","posted_at","postedAt","booking_date","bookingDate","datetime","created","updated_at","balance","balance_after","balanceAfter","account_balance","accountBalance","availableBalance","currentBalance","initialBalance","finalBalance","initial_balance","final_balance","start_balance","end_balance","total_balance","totalBalance","amount","type","transaction","id","entries","total","pagination","description","category","name"}
+              def keys(obj):
+                  return sorted(k for k in obj if k in known_keys)
+              print("Root keys:",keys(data),"other count:",len(set(data)-known_keys))
+              print("Entry keys:",keys(rows[0]),"other count:",len(set(rows[0])-known_keys))
+              print("Transaction keys:",keys(rows[0]["transaction"]))
+              print("Amount signs:",dict(Counter((r["type"]+("_negative" if r["amount"]<0 else "_nonnegative")) for r in rows if r["type"] in ("CREDIT","DEBIT"))))
               print("Entry schemas:",json.dumps(sorted({json.dumps(shape(r),sort_keys=True) for r in rows})))
               for k in ("type","direction","entry_type","transaction_type"):
                   known={"CREDIT","DEBIT","IN","OUT","INCOME","EXPENSE","PIX","TRANSFER","PAYMENT","BOLETO","REFUND"}
