@@ -82,3 +82,25 @@ def sync(db, auth, confirmed_from, month, unit="102"):
         payload["updatedAt"]=firestore.SERVER_TIMESTAMP
         transaction.set(db.collection("finance_units").document(unit).collection("months").document(month),payload)
     write(db.transaction())
+
+def sync_authorized_residents(db, auth, month):
+    """Only explicitly scoped, approved resident accounts; never infer historical consent."""
+    for unit in sorted(RESIDENT_UNITS - {"401","501"}):
+        scope=db.collection("resident_projection_scopes").document(unit).get().to_dict() or {}
+        if unit=="102":
+            start="2026-11-01"
+        elif scope.get("enabled") is True and isinstance(scope.get("confirmedFrom"),str):
+            start=scope["confirmedFrom"]
+        else:
+            continue
+        accounts=[s for s in db.collection("users").where("unit","==",unit).stream() if s.to_dict().get("status")=="approved"]
+        if len(accounts)!=1 or accounts[0].to_dict().get("role")!="resident":
+            continue
+        if unit!="102" and scope.get("authorizedUid")!=accounts[0].id:
+            continue
+        try:
+            sync(db,auth,start,month,unit)
+            print("Projection refreshed:",unit)
+        except Exception as exc:
+            print("Projection blocked:",unit,type(exc).__name__)
+            raise
