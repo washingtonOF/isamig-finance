@@ -156,6 +156,17 @@ service cloud.firestore {
      && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
    allow update, delete: if false;
   }
+  match /official_documents/regimento {
+   allow get: if master() || approved();
+   allow list: if false;
+   allow create, update: if master()
+     && request.resource.data.keys().hasOnly(['name','pdf','updatedAt','updatedBy'])
+     && request.resource.data.keys().hasAll(['name','pdf','updatedAt','updatedBy'])
+     && request.resource.data.name is string && request.resource.data.name.size() <= 200
+     && request.resource.data.pdf is string && request.resource.data.pdf.size() <= 900000
+     && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid;
+   allow delete: if false;
+  }
   match /{document=**} { allow read, write: if false; }
  }
 }
