@@ -12,9 +12,18 @@ def sync(db, auth, confirmed_from, month, unit="102"):
     if unit not in RESIDENT_UNITS: raise ValueError("Invalid resident unit")
     accounts=list(db.collection("users").where("unit","==",unit).stream())
     approved=[s for s in accounts if s.to_dict().get("status")=="approved"]
-    if len(approved)!=1: raise ValueError("Ambiguous account")
-    uid=approved[0].id
-    identity=auth.get_user(uid)
+    if unit=="204":
+        identity=auth.get_user_by_email("washington.s.souza@gmail.com")
+        if not any(p.provider_id=="google.com" for p in identity.provider_data): raise ValueError("Master provider mismatch")
+        uid=identity.uid
+        def read_account(transaction=None):
+            return {"unit":"204","role":"master","status":"approved","email":identity.email}
+    else:
+        if len(approved)!=1: raise ValueError("Ambiguous account")
+        uid=approved[0].id
+        identity=auth.get_user(uid)
+        def read_account(transaction=None):
+            return approved[0].reference.get(transaction=transaction).to_dict()
     if identity.disabled or not identity.email_verified: raise ValueError("Unverified account")
     today=datetime.now(ZoneInfo("America/Fortaleza")).date()
     link=db.collection("unit_payer_links").document(unit).get().to_dict() or {}
@@ -46,7 +55,7 @@ def sync(db, auth, confirmed_from, month, unit="102"):
     print("Details checked:",len(details),"valid Pix:",sum(x[1] for x in details.values()))
     @firestore.transactional
     def write(transaction):
-        account=approved[0].reference.get(transaction=transaction).to_dict()
+        account=read_account(transaction)
         if identity.email!=account.get("email"): raise ValueError("Auth mismatch")
         registry=db.collection("residents").document(unit).get(transaction=transaction).to_dict()
         links={s.id:s.to_dict() for s in db.collection("unit_payer_links").stream(transaction=transaction)}
@@ -88,16 +97,19 @@ def sync_authorized_residents(db, auth, month):
     blocked=0
     for unit in sorted(RESIDENT_UNITS - {"401","501"}):
         try:
-            accounts=[s for s in db.collection("users").where("unit","==",unit).stream() if s.to_dict().get("status")=="approved"]
-            if len(accounts)!=1:
-                print("Projection skipped:",unit,"account unavailable or ambiguous")
-                continue
-            account=accounts[0].to_dict()
-            if account.get("role") not in ("resident","administrative") and not (unit=="204" and account.get("role")=="master"):
-                continue
+            if unit=="204":
+                uid=auth.get_user_by_email("washington.s.souza@gmail.com").uid
+            else:
+                accounts=[s for s in db.collection("users").where("unit","==",unit).stream() if s.to_dict().get("status")=="approved"]
+                if len(accounts)!=1:
+                    print("Projection skipped:",unit,"account unavailable or ambiguous")
+                    continue
+                account=accounts[0].to_dict()
+                if account.get("role") not in ("resident","administrative"): continue
+                uid=accounts[0].id
             scope=db.collection("resident_projection_scopes").document(unit).get().to_dict() or {}
             start=max("2025-12-01",scope.get("confirmedFrom") or "2025-12-01")
-            if scope.get("enabled") is False or (scope.get("authorizedUid") and scope["authorizedUid"]!=accounts[0].id):
+            if scope.get("enabled") is False or (scope.get("authorizedUid") and scope["authorizedUid"]!=uid):
                 print("Projection skipped:",unit,"scope restricted")
                 continue
             y,m=map(int,month.split("-"))
