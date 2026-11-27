@@ -55,6 +55,16 @@ def main():
                 payload={k:row[k] for k in ("id","status","created_at","due_date","paid_at","total_amount") if k in row}
                 payload.update(payer=payer,updatedAt=firestore.SERVER_TIMESTAMP)
                 ref.set(payload,merge=True)
+            from finance_classification import summarize_invoices
+            counts = summarize_invoices(rows, today)
+            if counts["unclassified"]:
+                raise ValueError("Unclassified invoice status")
+            db.collection("finance_admin").document(period).set({
+                "period":period,"coverageStart":start.isoformat(),"coverageEnd":end.isoformat(),
+                "invoiceCounts":dict(counts,total=len(rows)),
+                "updatedAt":firestore.SERVER_TIMESTAMP,"scope":"invoice_query_period",
+                "monetaryDataAvailable":False
+            },merge=True)
             checkpoint.set({"count":len(rows),"completedAt":firestore.SERVER_TIMESTAMP,"start":start.isoformat(),"end":end.isoformat()})
             print(period,"boletos",len(rows),"novos pagadores",created,flush=True)
         month-=1
