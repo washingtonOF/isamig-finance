@@ -65,20 +65,19 @@ jobs:
                   day=stamp.astimezone(ZoneInfo("America/Fortaleza")).date()
                   if day.strftime("%Y-%m")!=period: raise ValueError("Wrong month")
                   bills=[i for i in invoices if str(i.get("due_date","")).startswith(period+"-") and i.get("total_amount")==25000]
-                  if len(bills)!=1:
-                      print("Blocked month",period,"matching invoices",len(bills))
-                      continue
-                  bill=bills[0]
-                  detail=client.invoice_details(bill["id"])
-                  if detail.get("id")!=bill["id"] or str(detail.get("status","")).upper() not in ("OPEN","PENDING","LATE","OVERDUE"):
-                      print("Blocked month",period,"invoice not confirmed open")
-                      continue
-                  services=detail.get("services") or []
+                  verified=[]
                   import re
-                  desc=" ".join(str(s.get("name","")) for s in services if isinstance(s,dict))
-                  if not re.search(r"condomin",norm(desc)) or set(re.findall(r"\b(?:unidade|apartamento|ap|apto)\s*[:#.-]?\s*(\d{3})\b",norm(desc)))!={"404"}:
-                      print("Blocked month",period,"invoice purpose or unit not verified")
+                  for bill in bills:
+                      detail=client.invoice_details(bill["id"])
+                      if detail.get("id")!=bill["id"]: raise ValueError("Invoice identity mismatch")
+                      services=detail.get("services") or []
+                      desc=" ".join(str(s.get("name","")) for s in services if isinstance(s,dict))
+                      if re.search(r"condomin",norm(desc)) and set(re.findall(r"\b(?:unidade|apartamento|ap|apto)\s*[:#.-]?\s*(\d{3})\b",norm(desc)))=={"404"}:
+                          verified.append((bill,str(detail.get("status","")).upper()))
+                  if len(verified)!=1 or verified[0][1] not in ("OPEN","PENDING","LATE","OVERDUE"):
+                      print("Blocked month",period,"verified unit invoices",len(verified))
                       continue
+                  bill=verified[0][0]
                   key=hashlib.sha256(r["id"].encode()).hexdigest()
                   pending.append((period,key,{"schema":1,"unit":"404","period":period,"amountCents":25000,"paidDate":day.isoformat(),"source":"cora_direct_pix","status":"paid","invoiceId":bill["id"],"receiptKey":key,"updatedAt":firestore.SERVER_TIMESTAMP}))
               for period,key,payload in pending:
