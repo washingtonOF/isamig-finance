@@ -1,0 +1,54 @@
+name: Reset test registrations
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reset-test-registration.yml'
+permissions:
+  contents: read
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'firebase-admin>=6,<8'
+      - env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import json, os
+          import firebase_admin
+          from firebase_admin import auth, credentials, firestore
+          info=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+          assert info["project_id"]=="vinnas-del-mar-finance"
+          firebase_admin.initialize_app(credentials.Certificate(info))
+          db=firestore.client()
+          for email in ("washington.souza@grupoisamig.com.br","adm.isamig@gmail.com"):
+              try:
+                  user=auth.get_user_by_email(email)
+              except auth.UserNotFoundError:
+                  print("Account absent")
+                  continue
+              uid=user.uid
+              account=db.collection("users").document(uid).get()
+              decision=db.collection("registration_decisions").document(uid).get()
+              state=(account.to_dict() or {}).get("status")
+              if state not in (None,"pending") or (decision.to_dict() or {}).get("decision")=="approved" or user.custom_claims:
+                  print("Protected account skipped")
+                  continue
+              auth.update_user(uid,disabled=True)
+              auth.revoke_refresh_tokens(uid)
+              batch=db.batch()
+              for name in ("users","registration_claims","registration_drafts","registration_review_private","registration_decisions","registration_auth_inventory"):
+                  batch.delete(db.collection(name).document(uid))
+              batch.commit()
+              auth.delete_user(uid)
+              print("Pending account removed")
+          ref=db.collection("test_units").document("107")
+          if not ref.get().exists:
+              ref.create({"label":"AP 107 — Unidade de Teste","testOnly":True,"createdAt":firestore.SERVER_TIMESTAMP})
+          print("Isolated test unit metadata ready")
+          PY
