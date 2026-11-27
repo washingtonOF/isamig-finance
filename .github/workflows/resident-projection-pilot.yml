@@ -66,3 +66,5 @@ jobs:
 # Diagnose original boleto URL availability.
 
 # Refresh original boleto URLs after verified storage host correction.
+
+# Refresh own-unit pilot for authorized ADM and resident.
