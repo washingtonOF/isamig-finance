@@ -31,6 +31,14 @@ const fs=require('node:fs');
  await assertFails(setDoc(doc(master,'users','resident'),{unit:'302',role:'resident',status:'approved'},{merge:true}));
  await assertFails(getDoc(doc(resident,'finance_units','302','months','2026-11')));
  await env.withSecurityRulesDisabled(async ctx=>{await setDoc(doc(ctx.firestore(),'users','resident'),{unit:'302',role:'resident',status:'approved'},{merge:true});});
+ await assertFails(getDoc(doc(resident,'finance_units','302','months','2026-11')));
+ await env.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await setDoc(doc(db,'finance_units','302','months','2026-11'),{paymentSchema:1,authorizedUid:'previous-resident',invoices:[]});
+  await setDoc(doc(db,'finance_units','303','months','2026-11'),{paymentSchema:1,authorizedUid:'resident',invoices:[]});
+ });
+ await assertFails(getDoc(doc(resident,'finance_units','302','months','2026-11')));
+ await env.withSecurityRulesDisabled(async ctx=>{await setDoc(doc(ctx.firestore(),'finance_units','302','months','2026-11'),{paymentSchema:1,authorizedUid:'resident',invoices:[]});});
  await assertSucceeds(getDoc(doc(resident,'finance_units','302','months','2026-11')));
  await assertFails(getDoc(doc(resident,'finance_units','303','months','2026-11')));
  await assertFails(setDoc(doc(resident,'finance_units','302','months','2026-11'),{test:false}));
