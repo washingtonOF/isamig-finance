@@ -6,6 +6,16 @@ service cloud.firestore {
   function unitValid(u) { return u in ['101','102','103','104','201','202','203','204','301','302','303','304','401','402','403','404','501','502','503','504','601','602']; }
   function validAssignment(d) { return unitValid(d.unit) && d.unit != '204' && ((d.role == 'administrative' && d.unit in ['101','201']) || d.role == 'resident'); }
   // Registration requests are private and resolved by a trusted service.
+  match /registration_delete_requests/{uid} {
+   allow get, list: if master();
+   allow create: if master() && uid != request.auth.uid
+     && request.resource.data.keys().hasOnly(['email','status','requestedBy','requestedAt'])
+     && request.resource.data.email is string && request.resource.data.email != 'washington.s.souza@gmail.com'
+     && request.resource.data.status == 'queued'
+     && request.resource.data.requestedBy == request.auth.uid && request.resource.data.requestedAt == request.time
+     && (!exists(/databases/$(database)/documents/users/$(uid)) || get(/databases/$(database)/documents/users/$(uid)).data.status == 'pending');
+   allow update, delete: if false;
+  }
   match /registration_auth_inventory/{uid} {
    allow get, list: if master();
    allow write: if false;
