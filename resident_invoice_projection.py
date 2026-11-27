@@ -7,10 +7,10 @@ def payer_key(cpf):
     digits = "".join(c for c in str(cpf) if c in "0123456789")
     return hashlib.sha256(digits.encode()).hexdigest() if len(digits)==11 else None
 
-RESIDENT_UNITS = frozenset(str(f*100+n) for f in range(1,7) for n in range(1,5 if f<6 else 3)) - {"204"}
+RESIDENT_UNITS = frozenset(str(f*100+n) for f in range(1,7) for n in range(1,5 if f<6 else 3))
 
 def project(unit, uid, account, registry, link, all_links, invoices, month, today, confirmed_from, monetary_verified=False):
-    if unit not in RESIDENT_UNITS or account.get("unit") != unit or account.get("status") != "approved" or not (account.get("role") == "resident" or (unit in ("101","201") and account.get("role") == "administrative")):
+    if unit not in RESIDENT_UNITS or account.get("unit") != unit or account.get("status") != "approved" or not (account.get("role") in ("resident","administrative") or (unit=="204" and account.get("role")=="master")):
         raise ValueError("Pilot account not eligible")
     if not uid or not account.get("email") or account["email"].strip().lower()!=str(registry.get("email","")).strip().lower():
         raise ValueError("Identity mismatch")
