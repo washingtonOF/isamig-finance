@@ -13,6 +13,8 @@ service cloud.firestore {
      && request.resource.data.email is string && request.resource.data.email != 'washington.s.souza@gmail.com'
      && request.resource.data.status == 'queued'
      && request.resource.data.requestedBy == request.auth.uid && request.resource.data.requestedAt == request.time
+     && !exists(/databases/$(database)/documents/registration_decisions/$(uid))
+     && !exists(/databases/$(database)/documents/test_access/$(uid))
      && (!exists(/databases/$(database)/documents/users/$(uid)) || get(/databases/$(database)/documents/users/$(uid)).data.status == 'pending');
    allow update, delete: if false;
   }
