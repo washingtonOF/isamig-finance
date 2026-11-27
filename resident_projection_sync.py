@@ -52,9 +52,14 @@ def sync(db, auth, confirmed_from, month):
         payload=project(unit,uid,account,registry,links[unit],links,invoices,month,today,confirmed_from,True)
         selected=[row for row in invoices if row.get("payer")==links[unit]["payer"] and str(row.get("due_date","")).startswith(month+"-") and row["due_date"]>=confirmed_from]
         if len(selected)!=len(payload["invoices"]): raise ValueError("Projection mismatch")
+        verified_bills=[]
         for row, bill in zip(selected,payload["invoices"]):
             if row["id"] not in details: raise ValueError("Missing detail")
             description, pix_valid, status, paid_at, checked_at, pix, slip_url = details[row["id"]]
+            import re
+            units_named=set(re.findall(r"\b(?:unidade|apartamento|ap)\s*[:#-]?\s*(\d{3})\b",description,re.I))
+            if units_named!={unit}: continue
+            verified_bills.append(bill)
             bill["description"]=description
             if not isinstance(status,str): raise ValueError("Missing live status")
             category=classify_invoice(status,row["due_date"],today)
@@ -70,6 +75,7 @@ def sync(db, auth, confirmed_from, month):
             if pix_valid and status.upper() in ("OPEN","LATE","OVERDUE") and category in ("pending","overdue"):
                 bill["pixCode"]=pix
                 bill["pixExpiresAt"]=(checked_at+timedelta(minutes=30)).isoformat()
+        payload["invoices"]=verified_bills
         payload["paymentEnabled"]=any("pixCode" in bill for bill in payload["invoices"])
         payload["updatedAt"]=firestore.SERVER_TIMESTAMP
         transaction.set(db.collection("finance_units").document(unit).collection("months").document(month),payload)
