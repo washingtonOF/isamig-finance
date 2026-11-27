@@ -30,7 +30,7 @@ jobs:
           from cora_client import CoraClient
           from finance_pagination import collect_pages
           import json
-          allowed=set("id type transaction description amount createdAt payer sender origin originator counterparty source destination receiver recipient name fullName full_name payerName senderName document taxId cpf cnpj account bank institution details payment pix endToEndId endToEnd transactionId person customer debtor creditor owner holder accountHolder".split())
+          allowed=set("id type transaction description amount createdAt payer sender origin originator counterparty counterParty identity source destination receiver recipient name fullName full_name payerName senderName document taxId cpf cnpj account bank institution details payment pix endToEndId endToEnd transactionId person customer debtor creditor owner holder accountHolder".split())
           def shape(obj,depth=0):
               if depth>6: return "nested"
               if isinstance(obj,dict):
@@ -41,6 +41,13 @@ jobs:
               rows=collect_pages(CoraClient().statement,"2026-11-03","2026-11-03","entries",50)
               matches=[r for r in rows if str(r.get("type","")).upper()=="CREDIT" and str(r.get("transaction",{}).get("type","")).upper()=="PIX" and r.get("amount")==25000]
               print("Candidate count:",len(matches))
+              print("Named counterpart count:",sum(isinstance(r["transaction"].get("counterParty"),dict) and bool(r["transaction"]["counterParty"].get("name")) for r in matches))
+              import unicodedata
+              def is_fatima(r):
+                  p=r["transaction"].get("counterParty") or {}
+                  name=p.get("name") if isinstance(p,dict) else None
+                  return isinstance(name,str) and "fatima" in "".join(c for c in unicodedata.normalize("NFD",name.lower()) if not unicodedata.combining(c)).split()
+              print("Fatima name token matches:",sum(is_fatima(r) for r in matches))
               print("Allowed field schemas:",json.dumps(sorted({json.dumps(shape(r),sort_keys=True) for r in matches})))
           except Exception as exc:
               print("Inspection blocked:",type(exc).__name__)
