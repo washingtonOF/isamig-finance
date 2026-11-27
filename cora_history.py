@@ -26,6 +26,7 @@ def main():
                 if delay>300: raise
                 time.sleep(max(5,delay))
     year,month=today.year,today.month
+    current_only=os.environ.get("CORA_CURRENT_ONLY")=="1"
     while year>=2019:
         start=date(year,month,1)
         end=min(today,date(year,month,calendar.monthrange(year,month)[1]))
@@ -64,7 +65,7 @@ def main():
             def cents(value):
                 return type(value) is int and 0 <= value <= 9007199254740991
             from finance_classification import classify_invoice
-            money_ok=all(cents(row.get("total_amount")) and (row.get("status","").upper()!="PAID" or cents(row.get("total_paid"))) for row in rows)
+            money_ok=False and all(cents(row.get("total_amount")) and (row.get("status","").upper()!="PAID" or cents(row.get("total_paid"))) for row in rows)
             amounts=None
             if money_ok:
                 amounts=dict(total=sum(row["total_amount"] for row in rows),paid=0,pending=0,overdue=0,cancelled=0)
@@ -79,6 +80,7 @@ def main():
             },merge=True)
             checkpoint.set({"count":len(rows),"completedAt":firestore.SERVER_TIMESTAMP,"start":start.isoformat(),"end":end.isoformat()})
             print(period,"boletos",len(rows),"novos pagadores",created,flush=True)
+        if current_only: break
         month-=1
         if month==0: year-=1;month=12
 if __name__=="__main__":
