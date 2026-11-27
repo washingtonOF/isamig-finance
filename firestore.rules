@@ -115,7 +115,7 @@ service cloud.firestore {
    allow list, write: if false;
   }
   match /finance_units/{u}/months/{period} {
-   allow get: if unitValid(u) && (master() || administrative() || own(u));
+   allow get: if unitValid(u) && (master() || administrative() || (own(u) && resource.data.paymentSchema == 1 && resource.data.authorizedUid == request.auth.uid));
    allow list, write: if false;
   }
   match /{document=**} { allow read, write: if false; }
