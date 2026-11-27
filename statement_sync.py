@@ -53,7 +53,7 @@ def sync_month(db, client, start, end, invoices, payers, links):
     db.collection("finance_admin").document(start[:7]).set(payload,merge=True)
     print("Statement mirror published:",len(rows))
 
-def sync_statement(db, client):
+def sync_statement(db, client, months=12):
     today=datetime.now(ZoneInfo("America/Fortaleza")).date()
     invoices={d.get("id"):d for snap in db.collection("cora_invoice_private").stream() if (d:=snap.to_dict()).get("id")}
     payers={snap.id:(snap.to_dict().get("name") or "") for snap in db.collection("cora_import_private").stream()}
@@ -63,7 +63,7 @@ def sync_statement(db, client):
         payer=d.get("payer") or d.get("payerKey") or d.get("payerId")
         if payer: links.setdefault(payer,[]).append(snap.id)
     month=today.replace(day=1)
-    for i in range(12):
+    for i in range(months):
         next_month=(month.replace(day=28)+timedelta(days=4)).replace(day=1)
         end=min(today,next_month-timedelta(days=1))
         sync_month(db,client,month.isoformat(),end.isoformat(),invoices,payers,links)
