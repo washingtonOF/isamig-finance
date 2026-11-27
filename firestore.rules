@@ -61,6 +61,15 @@ service cloud.firestore {
    allow get: if unitValid(u) && (master() || administrative() || own(u));
    allow list, write: if false;
   }
+  match /test_units/{u} {
+   allow get: if master() && u == '107';
+   allow write, list: if false;
+   match /registry/{record} {
+    allow get: if master() && u == '107' && record == 'resident';
+    allow create, update: if master() && u == '107' && record == 'resident' && validResident(request.resource.data);
+    allow list, delete: if false;
+   }
+  }
   match /residents/{u} {
    allow get: if unitValid(u) && (master() || administrative() || own(u));
    allow list: if master() || administrative();
