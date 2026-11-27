@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 from finance_pagination import collect_pages
 from google.cloud import firestore
 
-def sync_month(db, client, start, end):
+def sync_month(db, client, start, end, invoices, payers, links):
     entries=collect_pages(client.statement,start,end,"entries",50)
     rows=[]
     totals={"credit":0,"debit":0}
@@ -20,6 +20,20 @@ def sync_month(db, client, start, end):
         if not isinstance(description,str): raise ValueError("Invalid description")
         totals[kind]+=amount
         rows.append({"date":day,"transactionType":str(row["transaction"].get("type",""))[:100],"description":description[:500],"type":kind,"amountCents":amount})
+    matched=0
+    for raw, row in zip(entries,rows):
+        if row["type"]!="credit" or row["transactionType"].upper()!="PAYMENT": continue
+        invoice=invoices.get(raw["transaction"].get("id"))
+        if not invoice or invoice.get("status","").upper()!="PAID" or invoice.get("total_paid")!=row["amountCents"]: continue
+        paid=str(invoice.get("paid_at") or "")[:10]
+        if paid!=row["date"]: continue
+        payer=invoice.get("payer")
+        if not payer: continue
+        row["payerName"]=payers.get(payer,"")
+        row["invoiceMatched"]=True
+        row["candidateUnits"]=sorted(links.get(payer,[]))
+        matched+=1
+    print("Exact invoice matches:",matched,"of",len(rows))
     if len(rows)>700: raise ValueError("Document size guard")
     payload={"statementSchema":2,"statementCoverageStart":start,"statementCoverageEnd":end,"statementEntries":rows,"statementTotalsCents":totals,"statementUpdatedAt":firestore.SERVER_TIMESTAMP}
     db.collection("finance_admin").document(start[:7]).set(payload,merge=True)
@@ -27,9 +41,16 @@ def sync_month(db, client, start, end):
 
 def sync_statement(db, client):
     today=datetime.now(ZoneInfo("America/Fortaleza")).date()
+    invoices={d.get("id"):d for snap in db.collection("cora_invoice_private").stream() if (d:=snap.to_dict()).get("id")}
+    payers={snap.id:(snap.to_dict().get("name") or "") for snap in db.collection("cora_import_private").stream()}
+    links={}
+    for snap in db.collection("unit_payer_links").stream():
+        d=snap.to_dict()
+        payer=d.get("payer") or d.get("payerKey") or d.get("payerId")
+        if payer: links.setdefault(payer,[]).append(snap.id)
     month=today.replace(day=1)
     for i in range(12):
         next_month=(month.replace(day=28)+timedelta(days=4)).replace(day=1)
         end=min(today,next_month-timedelta(days=1))
-        sync_month(db,client,month.isoformat(),end.isoformat())
+        sync_month(db,client,month.isoformat(),end.isoformat(),invoices,payers,links)
         month=(month-timedelta(days=1)).replace(day=1)
