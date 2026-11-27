@@ -8,3 +8,16 @@ secrets/
 __pycache__/
 .pytest_cache/
 *.db
+
+# Local credentials and certificate bundles
+.env.*
+!.env.example
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+*cert_key*.zip
+*service-account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
