@@ -43,6 +43,9 @@ def main():
     batch.set(db.collection("finance_admin").document("balance_day_"+observed.date().isoformat()),payload)
     batch.commit()
     print("Balance synchronized successfully; values omitted.")
+    from statement_sync import sync_statement
+    sync_statement(db,client,months=1)
+    print("Current month statement synchronized; values omitted.")
 if __name__=="__main__":
     try: main()
     except Exception as e:
