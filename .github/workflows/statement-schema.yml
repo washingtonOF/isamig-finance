@@ -48,6 +48,11 @@ jobs:
               def keys(obj):
                   return sorted(k for k in obj if k in known_keys)
               print("Root keys:",keys(data),"other count:",len(set(data)-known_keys))
+              import re
+              def metadata(obj,depth=0):
+                  if depth>3 or not isinstance(obj,dict): return {}
+                  return {k:(metadata(v,depth+1) if isinstance(v,dict) else type(v).__name__) for k,v in obj.items() if k!="entries" and re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]{0,60}",k)}
+              print("Statement metadata schema:",json.dumps(metadata(data),sort_keys=True))
               print("Entry keys:",keys(rows[0]),"other count:",len(set(rows[0])-known_keys))
               print("Transaction keys:",keys(rows[0]["transaction"]))
               print("Amount signs:",dict(Counter((r["type"]+("_negative" if r["amount"]<0 else "_nonnegative")) for r in rows if r["type"] in ("CREDIT","DEBIT"))))
