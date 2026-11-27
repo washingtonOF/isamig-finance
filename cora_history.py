@@ -33,7 +33,7 @@ def main():
         checkpoint=db.collection("cora_history_progress").document(period)
         progress=checkpoint.get()
         aggregate=db.collection("finance_admin").document(period).get()
-        if not progress.exists or not aggregate.exists or (month==today.month and year==today.year):
+        if not progress.exists or not aggregate.exists or not (aggregate.to_dict() or {}).get("monetaryDataAvailable") or (month==today.month and year==today.year):
             rows=collect_pages(lambda *args,**kwargs:retry(client.invoices,*args,**kwargs),start.isoformat(),end.isoformat(),"items",20)
             created=0
             for row in rows:
@@ -54,18 +54,28 @@ def main():
                             db.collection("cora_import_private").document(payer).create({"name":name.strip(),"document":digits,"email":customer.get("email") if isinstance(customer.get("email"),str) else "","phone":customer.get("telephone") if isinstance(customer.get("telephone"),str) else "","suggestedUnit":None,"source":"cora","status":"pending_review","importedAt":firestore.SERVER_TIMESTAMP})
                             created+=1
                         except AlreadyExists: pass
-                payload={k:row[k] for k in ("id","status","created_at","due_date","paid_at","total_amount") if k in row}
+                payload={k:row[k] for k in ("id","status","created_at","due_date","paid_at","total_amount","total_paid","fine_paid","interest_paid","discount_paid","payment_form") if k in row}
                 payload.update(payer=payer,updatedAt=firestore.SERVER_TIMESTAMP)
                 ref.set(payload,merge=True)
             from finance_classification import summarize_invoices
             counts = summarize_invoices(rows, today)
             if counts["unclassified"]:
                 raise ValueError("Unclassified invoice status")
+            def cents(value):
+                return type(value) is int and 0 <= value <= 9007199254740991
+            from finance_classification import classify_invoice
+            money_ok=all(cents(row.get("total_amount")) and (row.get("status","").upper()!="PAID" or cents(row.get("total_paid"))) for row in rows)
+            amounts=None
+            if money_ok:
+                amounts=dict(total=sum(row["total_amount"] for row in rows),paid=0,pending=0,overdue=0,cancelled=0)
+                for row in rows:
+                    category=classify_invoice(row["status"],row.get("due_date"),today)
+                    amounts[category]+=row["total_paid"] if category=="paid" else row["total_amount"]
             db.collection("finance_admin").document(period).set({
                 "period":period,"coverageStart":start.isoformat(),"coverageEnd":end.isoformat(),
                 "invoiceCounts":dict(counts,total=len(rows)),
                 "updatedAt":firestore.SERVER_TIMESTAMP,"scope":"invoice_query_period",
-                "monetaryDataAvailable":False
+                "monetaryDataAvailable":money_ok,"invoiceAmountsCents":amounts
             },merge=True)
             checkpoint.set({"count":len(rows),"completedAt":firestore.SERVER_TIMESTAMP,"start":start.isoformat(),"end":end.isoformat()})
             print(period,"boletos",len(rows),"novos pagadores",created,flush=True)
