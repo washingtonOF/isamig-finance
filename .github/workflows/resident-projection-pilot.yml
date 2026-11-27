@@ -55,3 +55,5 @@ jobs:
               print("Pilot blocked:",type(exc).__name__)
               raise SystemExit(1) from None
           PY
+
+# Refresh original boleto links for verified AP102 invoices.
