@@ -126,7 +126,8 @@ service cloud.firestore {
    allow get, list: if unitValid(u) && (master() || administrative() || own(u));
    allow create: if unitValid(u) && (master() || administrative())
      && request.resource.data.keys().hasAll(['type','subject','body','date','createdBy','createdAt'])
-     && request.resource.data.keys().hasOnly(['type','subject','body','date','createdBy','createdAt'])
+     && request.resource.data.keys().hasOnly(['type','subject','body','date','createdBy','createdAt','richBody'])
+     && (!('richBody' in request.resource.data) || (request.resource.data.richBody is string && request.resource.data.richBody.size() <= 60000))
      && request.resource.data.type in ['Comunicado','Notificação','Advertência','Convocação de assembleia','Declaração','Aviso de manutenção','Notificação de cobrança','Outros']
      && request.resource.data.subject is string && request.resource.data.subject.size() > 0 && request.resource.data.subject.size() <= 200
      && request.resource.data.body is string && request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 12000
