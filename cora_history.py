@@ -31,7 +31,9 @@ def main():
         end=min(today,date(year,month,calendar.monthrange(year,month)[1]))
         period=start.strftime("%Y-%m")
         checkpoint=db.collection("cora_history_progress").document(period)
-        if not checkpoint.get().exists or month==today.month and year==today.year:
+        progress=checkpoint.get()
+        aggregate=db.collection("finance_admin").document(period).get()
+        if not progress.exists or not aggregate.exists or (month==today.month and year==today.year):
             rows=collect_pages(lambda *args,**kwargs:retry(client.invoices,*args,**kwargs),start.isoformat(),end.isoformat(),"items",20)
             created=0
             for row in rows:
