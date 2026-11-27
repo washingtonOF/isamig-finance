@@ -1,0 +1,35 @@
+name: Resident eligibility inventory
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/resident-inventory.yml']
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: pip install 'firebase-admin>=6,<8'
+      - name: Check unit eligibility
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import os,json
+          import firebase_admin
+          from firebase_admin import credentials,auth,firestore
+          from resident_projection_inventory import inventory
+          try:
+              info=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+              if info.get("project_id")!="vinnas-del-mar-finance": raise ValueError("Wrong project")
+              firebase_admin.initialize_app(credentials.Certificate(info))
+              inventory(firestore.client(),auth)
+          except Exception as exc:
+              print("Inventory blocked:",type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
