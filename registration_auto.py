@@ -23,6 +23,20 @@ def grant(tx, db, uid, email):
     if decision_ref.get(transaction=tx).exists or db.collection("registration_delete_requests").document(uid).get(transaction=tx).exists or db.collection("test_access").document(uid).get(transaction=tx).exists:
         return
     residents = {d.id:d.to_dict() for d in db.collection("residents").stream(transaction=tx)}
+    test = db.collection("test_units").document("107").collection("registry").document("resident").get(transaction=tx).to_dict() or {}
+    cpf = normalize_cpf(claim.get("cpf"))
+    if cpf and normalize_cpf(test.get("cpf")) == cpf and not any(normalize_cpf(d.get("cpf")) == cpf for d in residents.values()):
+        if str(test.get("email") or "").strip().lower() != email.strip().lower():
+            return
+        if email.lower() not in {"adm.isamig@gmail.com", "washington.souza@grupoisamig.com.br"}:
+            return
+        lock = db.collection("registration_auto_locks").document("107")
+        if lock.get(transaction=tx).exists:
+            return
+        tx.create(lock, {"uid":uid,"createdAt":firestore.SERVER_TIMESTAMP})
+        tx.create(db.collection("test_access").document(uid), {"unit":"107","status":"approved","updatedBy":"automatic_verified_existing_email","updatedAt":firestore.SERVER_TIMESTAMP})
+        tx.set(db.collection("registration_review_private").document(uid), {"result":{"status":"test_matched","unit":"107"},"processedAt":firestore.SERVER_TIMESTAMP})
+        return
     unit = eligible(claim.get("cpf"), email, residents)
     if not unit:
         return
