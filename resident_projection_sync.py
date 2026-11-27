@@ -87,16 +87,16 @@ def sync_authorized_residents(db, auth, month):
     """Only explicitly scoped, approved resident accounts; never infer historical consent."""
     for unit in sorted(RESIDENT_UNITS - {"401","501"}):
         scope=db.collection("resident_projection_scopes").document(unit).get().to_dict() or {}
-        if unit=="102":
+        if unit in ("101","102"):
             start="2026-11-01"
         elif scope.get("enabled") is True and isinstance(scope.get("confirmedFrom"),str):
             start=scope["confirmedFrom"]
         else:
             continue
         accounts=[s for s in db.collection("users").where("unit","==",unit).stream() if s.to_dict().get("status")=="approved"]
-        if len(accounts)!=1 or accounts[0].to_dict().get("role")!="resident":
+        if len(accounts)!=1 or accounts[0].to_dict().get("role") not in ("resident","administrative"):
             continue
-        if unit!="102" and scope.get("authorizedUid")!=accounts[0].id:
+        if unit not in ("101","102") and scope.get("authorizedUid")!=accounts[0].id:
             continue
         try:
             sync(db,auth,start,month,unit)
