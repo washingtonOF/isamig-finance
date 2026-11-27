@@ -63,8 +63,15 @@ service cloud.firestore {
    allow list, write: if false;
   }
   // Retired test environment: retain records for audit, deny all browser access.
-  match /test_access/{uid} { allow read, write: if false; }
-  match /test_units/{document=**} { allow read, write: if false; }
+  // Retired virtual unit: historical records remain inaccessible to residents.
+  match /test_access/{uid} {
+   allow read: if master();
+   allow write: if false;
+  }
+  match /test_units/{document=**} {
+   allow read: if master();
+   allow write: if false;
+  }
   match /residents/{u} {
    allow get: if unitValid(u) && (master() || administrative() || own(u));
    allow list: if master() || administrative();
