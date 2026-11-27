@@ -1,6 +1,8 @@
 name: Resident projection - AP102 pilot
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '7,27,47 * * * *'
   push:
     branches: [main]
     paths: ['.github/workflows/resident-projection-pilot.yml']
@@ -44,12 +46,15 @@ jobs:
           import firebase_admin
           from firebase_admin import credentials,auth,firestore
           from resident_projection_sync import sync
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
           try:
               info=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
               if info.get("project_id")!="vinnas-del-mar-finance":
                   raise ValueError("Wrong project")
               firebase_admin.initialize_app(credentials.Certificate(info))
-              sync(firestore.client(),auth,"2026-11-01","2026-11")
+              month=datetime.now(ZoneInfo("America/Fortaleza")).strftime("%Y-%m")
+              sync(firestore.client(),auth,"2026-11-01",month)
               print("Pilot projection refreshed with unit mismatch quarantine.")
           except Exception as exc:
               print("Pilot blocked:",type(exc).__name__)
