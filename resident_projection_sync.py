@@ -88,7 +88,7 @@ def sync_authorized_residents(db, auth, month):
     for unit in sorted(RESIDENT_UNITS - {"401","501"}):
         scope=db.collection("resident_projection_scopes").document(unit).get().to_dict() or {}
         if unit in ("101","102"):
-            start="2026-11-01"
+            start="2025-12-01"
         elif scope.get("enabled") is True and isinstance(scope.get("confirmedFrom"),str):
             start=scope["confirmedFrom"]
         else:
@@ -99,7 +99,12 @@ def sync_authorized_residents(db, auth, month):
         if unit not in ("101","102") and scope.get("authorizedUid")!=accounts[0].id:
             continue
         try:
-            sync(db,auth,start,month,unit)
+            from datetime import date
+            y,m=map(int,month.split("-"))
+            periods=sorted({f"{(y*12+m-1-i)//12:04d}-{(y*12+m-1-i)%12+1:02d}" for i in range(12)} | {f"{y:04d}-{i:02d}" for i in range(1,13)})
+            for period in periods:
+                if period < start[:7]: continue
+                sync(db,auth,start,period,unit)
             print("Projection refreshed:",unit)
         except Exception as exc:
             print("Projection blocked:",unit,type(exc).__name__)
