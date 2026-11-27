@@ -167,6 +167,18 @@ service cloud.firestore {
      && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid;
    allow delete: if false;
   }
+  match /portal_audit/{event} {
+   allow get, list: if master();
+   allow create: if (approved() || master())
+     && request.resource.data.keys().hasOnly(['uid','unit','role','action','area','at'])
+     && request.resource.data.keys().hasAll(['uid','unit','role','action','area','at'])
+     && request.resource.data.uid == request.auth.uid
+     && request.resource.data.at == request.time
+     && request.resource.data.action in ['login','navigation','pdf','excel','download','logout']
+     && request.resource.data.area is string && request.resource.data.area.size() <= 100
+     && ((master() && request.resource.data.unit == '204' && request.resource.data.role == 'master') || (approved() && request.resource.data.unit == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.unit && request.resource.data.role == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role));
+   allow update, delete: if false;
+  }
   match /{document=**} { allow read, write: if false; }
  }
 }
