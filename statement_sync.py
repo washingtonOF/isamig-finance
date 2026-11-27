@@ -29,6 +29,12 @@ def sync_month(db, client, start, end, invoices, payers, links):
         if not isinstance(description,str): raise ValueError("Invalid description")
         totals[kind]+=amount
         rows.append({"date":day,"transactionAt":stamp.astimezone(ZoneInfo("America/Fortaleza")).isoformat(),"transactionType":str(row["transaction"].get("type",""))[:100],"description":description[:500],"type":kind,"amountCents":amount})
+    for raw, row in zip(entries,rows):
+        if row["type"]!="credit" or row["transactionType"].upper()!="PIX": continue
+        party=raw["transaction"].get("counterParty")
+        name=party.get("name") if isinstance(party,dict) else None
+        if isinstance(name,str) and name.strip():
+            row["payerName"]=name.strip()[:200]
     matched=0
     for raw, row in zip(entries,rows):
         if row["type"]!="credit" or row["transactionType"].upper()!="PAYMENT": continue
