@@ -67,6 +67,15 @@ jobs:
               t=str(row['transaction'].get('type','')).upper()
               groups[(row['type'],t if t in known else 'OTHER')]+=row['amount']
           print('Movement reconciliation:',dict(groups))
+          debit_days=Counter()
+          debit_counts=Counter()
+          for row in entries:
+              if row["type"]=="DEBIT":
+                  day=datetime.fromisoformat(row["createdAt"].replace("Z","+00:00")).astimezone(ZoneInfo("America/Fortaleza")).date().isoformat()
+                  debit_days[day]+=row["amount"]
+                  debit_counts[day]+=1
+          print("Debit daily totals:",dict(sorted(debit_days.items())))
+          print("Debit daily counts:",dict(sorted(debit_counts.items())))
           from google.oauth2 import service_account
           from google.cloud import firestore
           from statement_sync import sync_statement
