@@ -55,3 +55,5 @@ def process_auto(db):
             continue
         if user.email_verified and not user.disabled and user.email and user.email.lower() != "washington.s.souza@gmail.com":
             grant(db.transaction(), db, claim.id, user.email)
+
+# Registration processing recheck requested by portal administrator.
