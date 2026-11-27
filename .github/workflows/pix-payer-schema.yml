@@ -29,26 +29,25 @@ jobs:
           python - <<'PY'
           from cora_client import CoraClient
           from finance_pagination import collect_pages
-          import json
-          allowed=set("id type transaction description amount createdAt payer sender origin originator counterparty counterParty identity source destination receiver recipient name fullName full_name payerName senderName document taxId cpf cnpj account bank institution details payment pix endToEndId endToEnd transactionId person customer debtor creditor owner holder accountHolder".split())
-          def shape(obj,depth=0):
-              if depth>6: return "nested"
-              if isinstance(obj,dict):
-                  return {k:shape(v,depth+1) for k,v in obj.items() if k in allowed}
-              if isinstance(obj,list): return [shape(obj[0],depth+1)] if obj else []
-              return type(obj).__name__
+          from datetime import date,timedelta
+          import unicodedata
+          def norm(s):
+              return " ".join("".join(c for c in unicodedata.normalize("NFD",s.casefold()) if not unicodedata.combining(c)).split())
           try:
-              rows=collect_pages(CoraClient().statement,"2026-11-03","2026-11-03","entries",50)
-              matches=[r for r in rows if str(r.get("type","")).upper()=="CREDIT" and str(r.get("transaction",{}).get("type","")).upper()=="PIX" and r.get("amount")==25000]
-              print("Candidate count:",len(matches))
-              print("Named counterpart count:",sum(isinstance(r["transaction"].get("counterParty"),dict) and bool(r["transaction"]["counterParty"].get("name")) for r in matches))
-              import unicodedata
-              def is_fatima(r):
-                  p=r["transaction"].get("counterParty") or {}
-                  name=p.get("name") if isinstance(p,dict) else None
-                  return isinstance(name,str) and "fatima" in "".join(c for c in unicodedata.normalize("NFD",name.lower()) if not unicodedata.combining(c)).split()
-              print("Fatima name token matches:",sum(is_fatima(r) for r in matches))
-              print("Allowed field schemas:",json.dumps(sorted({json.dumps(shape(r),sort_keys=True) for r in matches})))
+              client=CoraClient()
+              start=date(2026,5,27)
+              end=date(2026,11,27)
+              while start<=end:
+                  stop=min(end,(start.replace(day=28)+timedelta(days=4)).replace(day=1)-timedelta(days=1))
+                  rows=collect_pages(client.statement,start.isoformat(),stop.isoformat(),"entries",50)
+                  matches=[]
+                  for r in rows:
+                      t=r.get("transaction",{})
+                      p=t.get("counterParty") or {}
+                      if r.get("type")=="CREDIT" and t.get("type")=="PIX" and r.get("amount")==25000 and isinstance(p.get("name"),str) and norm(p["name"])=="maria f holanda rebonatto" and not any(x in norm(str(t.get("description",""))) for x in ("md06","estorno","devolucao","refund","reversal")):
+                          matches.append(r)
+                  print("Month",start.strftime("%Y-%m"),"exact payer candidates",len(matches))
+                  start=stop+timedelta(days=1)
           except Exception as exc:
               print("Inspection blocked:",type(exc).__name__)
               raise SystemExit(1) from None
