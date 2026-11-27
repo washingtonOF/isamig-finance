@@ -33,6 +33,7 @@ jobs:
           from registration_processor import process, process_approved_contacts
           from registration_auth_inventory import sync_auth_inventory
           from registration_delete import process_deletions
+          from registration_auto import process_auto
           try:
               info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
               if info.get("project_id") != "vinnas-del-mar-finance":
@@ -42,6 +43,7 @@ jobs:
               process_deletions(db)
               sync_auth_inventory(db)
               process(db)
+              process_auto(db)
               process_approved_contacts(db)
               print("Registration processing completed.")
           except Exception as exc:
