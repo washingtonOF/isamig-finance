@@ -1,0 +1,52 @@
+name: Statement schema validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/statement-schema.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CORA_ENV: production
+      CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+      CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
+      CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -eu
+          umask 077
+          d=$(mktemp -d)
+          trap 'rm -rf "$d"' EXIT
+          printf '%s\n' "$CORA_CERTIFICATE" > "$d/cert"
+          printf '%s\n' "$CORA_PRIVATE_KEY" > "$d/key"
+          export CORA_CERT_PATH="$d/cert" CORA_KEY_PATH="$d/key"
+          python - <<'PY'
+          from cora_client import CoraClient
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from collections import Counter
+          import json
+          today=datetime.now(ZoneInfo("America/Fortaleza")).date()
+          try:
+              data=CoraClient().statement(today.replace(day=1).isoformat(),today.isoformat())
+              rows=data["entries"]
+              allowed={"id","date","created_at","transaction_date","description","amount","value","balance","type","direction","entry_type","transaction_type","status","name","category","transaction","credit","debit","currency","total","opening_balance","closing_balance","current_balance","available_balance","entries","counterparty","payment","details"}
+              def shape(v,depth=0):
+                  if depth>4: return type(v).__name__
+                  if isinstance(v,dict): return {k:shape(x,depth+1) for k,x in v.items() if k in allowed}
+                  if isinstance(v,list): return [shape(v[0],depth+1)] if v else []
+                  return type(v).__name__
+              print("Response schema:",json.dumps(shape(data),sort_keys=True))
+              print("Entry schemas:",json.dumps(sorted({json.dumps(shape(r),sort_keys=True) for r in rows})))
+              for k in ("type","direction","entry_type","transaction_type"):
+                  known={"CREDIT","DEBIT","IN","OUT","INCOME","EXPENSE","PIX","TRANSFER","PAYMENT","BOLETO","REFUND"}
+                  print(k,dict(Counter(str(r.get(k)).upper() if str(r.get(k)).upper() in known else "OTHER" for r in rows)))
+          except Exception as exc:
+              print("Schema check blocked:",type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
