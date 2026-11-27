@@ -71,6 +71,19 @@ service cloud.firestore {
    allow get: if unitValid(u) && (master() || administrative() || own(u));
    allow list, write: if false;
   }
+  match /test_access/{uid} {
+   allow get: if master() || (verified() && request.auth.uid == uid);
+   allow list: if master();
+   allow create, update: if master() && uid != request.auth.uid
+     && request.resource.data.keys().hasOnly(['unit','status','updatedBy','updatedAt'])
+     && request.resource.data.unit == '107'
+     && request.resource.data.status in ['approved','revoked']
+     && request.resource.data.updatedBy == request.auth.uid
+     && request.resource.data.updatedAt == request.time
+     && exists(/databases/$(database)/documents/users/$(uid))
+     && get(/databases/$(database)/documents/users/$(uid)).data.status == 'pending';
+   allow delete: if false;
+  }
   match /test_units/{u} {
    allow get: if master() && u == '107';
    allow write, list: if false;
