@@ -1,0 +1,43 @@
+name: Cora - Saldo bancario
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cora-balance.yml']
+permissions:
+  contents: read
+concurrency:
+  group: cora-balance
+  cancel-in-progress: false
+jobs:
+  history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python -m pip install 'google-cloud-firestore>=2.19,<3'
+      - name: Consultar saldo somente leitura
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          CORA_ENV: production
+          CORA_CURRENT_ONLY: "1"
+          CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+          CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
+          CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
+        run: |
+          set -eu
+          umask 077
+          tempdir="$(mktemp -d)"
+          trap 'rm -rf "$tempdir"' EXIT
+          printf '%s\n' "$CORA_CERTIFICATE" > "$tempdir/cert.pem"
+          printf '%s\n' "$CORA_PRIVATE_KEY" > "$tempdir/key.pem"
+          export CORA_CERT_PATH="$tempdir/cert.pem"
+          export CORA_KEY_PATH="$tempdir/key.pem"
+          unset CORA_CERTIFICATE CORA_PRIVATE_KEY
+          python cora_balance.py
+
+# Retry historical import with corrected pagination adapter.
