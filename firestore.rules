@@ -123,7 +123,8 @@ service cloud.firestore {
    allow list, write: if false;
   }
   match /unit_notices/{u}/messages/{id}/views/{uid} {
-   allow get, list: if unitValid(u) && (master() || administrative() || own(u));
+   allow get: if unitValid(u) && (master() || administrative() || (own(u) && uid == request.auth.uid));
+   allow list: if unitValid(u) && (master() || administrative());
    allow create: if unitValid(u) && (own(u) || (master() && u == '204')) && uid == request.auth.uid
      && exists(/databases/$(database)/documents/unit_notices/$(u)/messages/$(id))
      && request.resource.data.keys().hasOnly(['viewedAt','uid','name'])
@@ -133,7 +134,8 @@ service cloud.firestore {
    allow update, delete: if false;
   }
   match /unit_notices/{u}/messages/{id}/receipts/{uid} {
-   allow get, list: if unitValid(u) && (master() || administrative() || own(u));
+   allow get: if unitValid(u) && (master() || administrative() || (own(u) && uid == request.auth.uid));
+   allow list: if unitValid(u) && (master() || administrative());
    allow create: if unitValid(u) && (own(u) || (master() && u == '204')) && uid == request.auth.uid
      && exists(/databases/$(database)/documents/unit_notices/$(u)/messages/$(id))
      && request.resource.data.keys().hasOnly(['confirmedAt','uid','name'])
