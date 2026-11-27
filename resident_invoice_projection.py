@@ -10,7 +10,7 @@ def payer_key(cpf):
 RESIDENT_UNITS = frozenset(str(f*100+n) for f in range(1,7) for n in range(1,5 if f<6 else 3)) - {"204"}
 
 def project(unit, uid, account, registry, link, all_links, invoices, month, today, confirmed_from, monetary_verified=False):
-    if unit not in RESIDENT_UNITS or account.get("unit") != unit or account.get("status") != "approved" or account.get("role") != "resident":
+    if unit not in RESIDENT_UNITS or account.get("unit") != unit or account.get("status") != "approved" or not (account.get("role") == "resident" or (unit in ("101","201") and account.get("role") == "administrative")):
         raise ValueError("Pilot account not eligible")
     if not uid or not account.get("email") or account["email"].strip().lower()!=str(registry.get("email","")).strip().lower():
         raise ValueError("Identity mismatch")
