@@ -123,7 +123,7 @@ service cloud.firestore {
    allow list, write: if false;
   }
   match /unit_notices/{u}/messages/{id} {
-   allow get, list: if unitValid(u) && (master() || own(u));
+   allow get, list: if unitValid(u) && (master() || administrative() || own(u));
    allow create: if unitValid(u) && (master() || administrative())
      && request.resource.data.keys().hasAll(['type','subject','body','date','createdBy','createdAt'])
      && request.resource.data.keys().hasOnly(['type','subject','body','date','createdBy','createdAt'])
