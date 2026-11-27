@@ -50,7 +50,7 @@ jobs:
                   raise ValueError("Wrong project")
               firebase_admin.initialize_app(credentials.Certificate(info))
               sync(firestore.client(),auth,"2026-11-01","2026-11")
-              print("Pilot projection published with documented cent amounts.")
+              print("Pilot projection published with service descriptions.")
           except Exception as exc:
               print("Pilot blocked:",type(exc).__name__)
               raise SystemExit(1) from None
