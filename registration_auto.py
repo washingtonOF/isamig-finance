@@ -41,9 +41,11 @@ def grant(tx, db, uid, email):
         previous_account = db.collection("users").document(previous_uid).get(transaction=tx).to_dict() or {}
         if previous_account.get("status") != "revoked" or previous_account.get("unit") != unit:
             return
+    preference = db.collection("unit_access_preferences").document(unit).get(transaction=tx).to_dict() or {}
+    role = "administrative" if unit in {"101","201"} and preference.get("role") == "administrative" else "resident"
     tx.set(lock, {"uid":uid,"createdAt":firestore.SERVER_TIMESTAMP})
     tx.create(decision_ref, {"decision":"approved","unit":unit,"decidedBy":"automatic_verified_existing_email","decidedAt":firestore.SERVER_TIMESTAMP})
-    tx.update(account_ref, {"status":"approved","role":"resident","unit":unit})
+    tx.update(account_ref, {"status":"approved","role":role,"unit":unit})
 
 def process_auto(db):
     for claim in db.collection("registration_claims").stream():
