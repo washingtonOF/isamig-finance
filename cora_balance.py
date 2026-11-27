@@ -8,12 +8,9 @@ from cora_client import CoraClient
 
 def parse_balance(data):
     value=data.get("balance") if isinstance(data,dict) else None
-    # Only explicit decimal currency amounts; integer strings have ambiguous units.
-    if not isinstance(value,str) or not re.fullmatch(r"-?[0-9]{1,13}\.[0-9]{2}",value):
+    if type(value) is not int or abs(value)>9007199254740991:
         raise ValueError("Unverified balance format")
-    cents=int(Decimal(value)*100)
-    if abs(cents)>9007199254740991: raise ValueError("Balance out of range")
-    return cents
+    return value
 
 def main():
     if os.environ.get("CORA_ENV")!="production": raise ValueError("Production required")
@@ -27,7 +24,17 @@ def main():
     shape=("integer_string" if isinstance(value,str) and re.fullmatch(r"-?[0-9]+",value) else "decimal_string" if isinstance(value,str) and re.fullmatch(r"-?[0-9]+[.,][0-9]+",value) else "other_string" if isinstance(value,str) else type(value).__name__)
     print("Balance response: object="+str(isinstance(data,dict))+"; field format="+shape,flush=True)
     cents=parse_balance(data)
-    print("Balance format validated",flush=True)
+    # Statement ending balance is explicitly documented in cents.
+    from datetime import datetime,timedelta
+    from zoneinfo import ZoneInfo
+    today=datetime.now(ZoneInfo("America/Fortaleza")).date()
+    statement=client.statement((today-timedelta(days=31)).isoformat(),today.isoformat())
+    end=statement.get("end") if isinstance(statement,dict) else None
+    reference=end.get("balance") if isinstance(end,dict) else None
+    if type(reference) is not int or reference!=cents:
+        print("Balance unit cross-check not confirmed; no publication.",flush=True)
+        raise ValueError("Balance reconciliation required")
+    print("Balance verified against statement ending balance in cents",flush=True)
     db=firestore.Client(project=info["project_id"],credentials=service_account.Credentials.from_service_account_info(info))
     db.collection("finance_admin").document("current_balance").set({"balanceSchema":1,"balanceCents":cents,"source":"cora","updatedAt":firestore.SERVER_TIMESTAMP})
     print("Balance synchronized successfully; values omitted.")
