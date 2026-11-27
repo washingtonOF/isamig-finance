@@ -1,0 +1,44 @@
+name: Resident projection - AP102 pilot
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/resident-projection-pilot.yml']
+permissions:
+  contents: read
+concurrency:
+  group: resident-projection-pilot
+  cancel-in-progress: false
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'firebase-admin>=6,<8'
+      - run: python -m unittest -v test_resident_invoice_projection
+      - name: Publish approved pilot scope
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import os,json
+          import firebase_admin
+          from firebase_admin import credentials,auth,firestore
+          from resident_projection_sync import sync
+          try:
+              info=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+              if info.get("project_id")!="vinnas-del-mar-finance":
+                  raise ValueError("Wrong project")
+              firebase_admin.initialize_app(credentials.Certificate(info))
+              sync(firestore.client(),auth,"2026-11-01","2026-11")
+              print("Pilot projection published.")
+          except Exception as exc:
+              print("Pilot blocked:",type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
