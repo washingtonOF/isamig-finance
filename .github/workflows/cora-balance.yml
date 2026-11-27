@@ -1,6 +1,8 @@
 name: Cora - Saldo bancario
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
   push:
     branches: [main]
     paths: ['.github/workflows/cora-balance.yml', 'cora_balance.py']
