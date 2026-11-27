@@ -29,7 +29,7 @@ def main():
     current_only=os.environ.get("CORA_CURRENT_ONLY")=="1"
     while year>=2019:
         start=date(year,month,1)
-        end=min(today,date(year,month,calendar.monthrange(year,month)[1]))
+        end=date(year,month,calendar.monthrange(year,month)[1])
         period=start.strftime("%Y-%m")
         checkpoint=db.collection("cora_history_progress").document(period)
         progress=checkpoint.get()
@@ -65,7 +65,7 @@ def main():
             def cents(value):
                 return type(value) is int and 0 <= value <= 9007199254740991
             from finance_classification import classify_invoice
-            money_ok=False and all(cents(row.get("total_amount")) and (row.get("status","").upper()!="PAID" or cents(row.get("total_paid"))) for row in rows)
+            money_ok=all(cents(row.get("total_amount")) and (row.get("status","").upper()!="PAID" or cents(row.get("total_paid"))) for row in rows)
             amounts=None
             if money_ok:
                 amounts=dict(total=sum(row["total_amount"] for row in rows),paid=0,pending=0,overdue=0,cancelled=0)
@@ -76,7 +76,7 @@ def main():
                 "period":period,"coverageStart":start.isoformat(),"coverageEnd":end.isoformat(),
                 "invoiceCounts":dict(counts,total=len(rows)),
                 "updatedAt":firestore.SERVER_TIMESTAMP,"scope":"invoice_query_period",
-                "monetaryDataAvailable":money_ok,"invoiceAmountsCents":amounts
+                "monetaryDataAvailable":money_ok,"invoiceAmountsCents":amounts,"monetarySchemaVerified":money_ok
             },merge=True)
             checkpoint.set({"count":len(rows),"completedAt":firestore.SERVER_TIMESTAMP,"start":start.isoformat(),"end":end.isoformat()})
             print(period,"boletos",len(rows),"novos pagadores",created,flush=True)
