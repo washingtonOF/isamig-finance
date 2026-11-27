@@ -28,7 +28,7 @@ def sync_month(db, client, start, end, invoices, payers, links):
         description=row["transaction"]["description"]
         if not isinstance(description,str): raise ValueError("Invalid description")
         totals[kind]+=amount
-        rows.append({"date":day,"transactionType":str(row["transaction"].get("type",""))[:100],"description":description[:500],"type":kind,"amountCents":amount})
+        rows.append({"date":day,"transactionAt":stamp.astimezone(ZoneInfo("America/Fortaleza")).isoformat(),"transactionType":str(row["transaction"].get("type",""))[:100],"description":description[:500],"type":kind,"amountCents":amount})
     matched=0
     for raw, row in zip(entries,rows):
         if row["type"]!="credit" or row["transactionType"].upper()!="PAYMENT": continue
