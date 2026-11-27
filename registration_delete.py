@@ -12,8 +12,9 @@ def process_deletions(db):
             user = None
         account = db.collection("users").document(uid).get().to_dict() or {}
         decision = db.collection("registration_decisions").document(uid).get().to_dict() or {}
+        test = db.collection("test_access").document(uid).get().to_dict() or {}
         email = (user.email if user else account.get("email")) or ""
-        if email.lower() == "washington.s.souza@gmail.com" or (user and user.custom_claims) or account.get("status") not in (None, "pending") or decision.get("decision") == "approved" or (user and email != data.get("email")):
+        if email.lower() == "washington.s.souza@gmail.com" or (user and user.custom_claims) or account.get("status") not in (None, "pending") or decision.get("decision") == "approved" or test.get("status") == "approved" or (user and email != data.get("email")):
             req.reference.update({"status":"protected","finishedAt":firestore.SERVER_TIMESTAMP})
             continue
         if user:
