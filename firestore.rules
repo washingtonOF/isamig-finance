@@ -122,6 +122,16 @@ service cloud.firestore {
    allow get: if unitValid(u) && (master() || administrative() || (own(u) && resource.data.paymentSchema == 1 && resource.data.authorizedUid == request.auth.uid));
    allow list, write: if false;
   }
+  match /unit_notices/{u}/messages/{id}/receipts/{uid} {
+   allow get, list: if unitValid(u) && (master() || administrative() || own(u));
+   allow create: if unitValid(u) && own(u) && uid == request.auth.uid
+     && exists(/databases/$(database)/documents/unit_notices/$(u)/messages/$(id))
+     && request.resource.data.keys().hasOnly(['confirmedAt','uid','name'])
+     && request.resource.data.keys().hasAll(['confirmedAt','uid','name'])
+     && request.resource.data.uid == uid && request.resource.data.confirmedAt == request.time
+     && request.resource.data.name == get(/databases/$(database)/documents/users/$(uid)).data.name;
+   allow update, delete: if false;
+  }
   match /unit_notices/{u}/messages/{id} {
    allow get, list: if unitValid(u) && (master() || administrative() || own(u));
    allow create: if unitValid(u) && (master() || administrative())
