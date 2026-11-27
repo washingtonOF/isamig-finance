@@ -39,6 +39,9 @@ def grant(tx, db, uid, email):
         return
     unit = eligible(claim.get("cpf"), email, residents)
     if not unit:
+        result = resolve_registration(claim.get("cpf"), residents)
+        reason = "email_mismatch" if result.get("status") == "matched" else result.get("status", "review")
+        tx.set(db.collection("registration_review_private").document(uid), {"result": {**result, "autoReason": reason}, "processedAt": firestore.SERVER_TIMESTAMP})
         return
     if any(d.id != uid and d.to_dict().get("status") == "approved" for d in db.collection("users").where("unit","==",unit).stream(transaction=tx)):
         return
