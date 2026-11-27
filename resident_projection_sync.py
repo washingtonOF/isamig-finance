@@ -37,10 +37,10 @@ def sync(db, auth, confirmed_from, month, unit="102"):
         pix=(detail.get("pix") or {}).get("emv")
         slip=((detail.get("payment_options") or {}).get("bank_slip") or {})
         url=slip.get("url")
-        print("Boleto schema:", sorted(detail.keys()), "payment_options:", sorted((detail.get("payment_options") or {}).keys()), "bank_slip:", sorted(slip.keys()))
+        
         from urllib.parse import urlsplit
         parsed=urlsplit(url) if isinstance(url,str) else None
-        print("Boleto URL present:", bool(url), "host:", parsed.hostname if parsed else None)
+        
         safe_url=url if parsed and parsed.scheme=="https" and parsed.hostname and (parsed.hostname in ("cora.com.br","storage.googleapis.com") or parsed.hostname.endswith(".cora.com.br")) and not parsed.username and not parsed.password and parsed.port in (None,443) else None
         details[row["id"]]=(description,valid_pix(pix),detail.get("status"),detail.get("paid_at"),datetime.now(timezone.utc),pix,safe_url)
     print("Details checked:",len(details),"valid Pix:",sum(x[1] for x in details.values()))
@@ -84,28 +84,28 @@ def sync(db, auth, confirmed_from, month, unit="102"):
     write(db.transaction())
 
 def sync_authorized_residents(db, auth, month):
-    """Only explicitly scoped, approved resident accounts; never infer historical consent."""
+    """Owner-authorized rollout, retaining identity and unique payer checks."""
+    blocked=0
     for unit in sorted(RESIDENT_UNITS - {"401","501"}):
-        scope=db.collection("resident_projection_scopes").document(unit).get().to_dict() or {}
-        if unit in ("101","102"):
-            start="2025-12-01"
-        elif scope.get("enabled") is True and isinstance(scope.get("confirmedFrom"),str):
-            start=scope["confirmedFrom"]
-        else:
-            continue
-        accounts=[s for s in db.collection("users").where("unit","==",unit).stream() if s.to_dict().get("status")=="approved"]
-        if len(accounts)!=1 or accounts[0].to_dict().get("role") not in ("resident","administrative"):
-            continue
-        if unit not in ("101","102") and scope.get("authorizedUid")!=accounts[0].id:
-            continue
         try:
-            from datetime import date
+            accounts=[s for s in db.collection("users").where("unit","==",unit).stream() if s.to_dict().get("status")=="approved"]
+            if len(accounts)!=1:
+                print("Projection skipped:",unit,"account unavailable or ambiguous")
+                continue
+            account=accounts[0].to_dict()
+            if account.get("role") not in ("resident","administrative") and not (unit=="204" and account.get("role")=="master"):
+                continue
+            scope=db.collection("resident_projection_scopes").document(unit).get().to_dict() or {}
+            start=max("2025-12-01",scope.get("confirmedFrom") or "2025-12-01")
+            if scope.get("enabled") is False or (scope.get("authorizedUid") and scope["authorizedUid"]!=accounts[0].id):
+                print("Projection skipped:",unit,"scope restricted")
+                continue
             y,m=map(int,month.split("-"))
-            periods=sorted({f"{(y*12+m-1-i)//12:04d}-{(y*12+m-1-i)%12+1:02d}" for i in range(12)} | {f"{y:04d}-{i:02d}" for i in range(1,13)})
+            periods=[f"{(y*12+m-1-i)//12:04d}-{(y*12+m-1-i)%12+1:02d}" for i in range(12)]
             for period in periods:
-                if period < start[:7]: continue
-                sync(db,auth,start,period,unit)
+                if period>=start[:7]: sync(db,auth,start,period,unit)
             print("Projection refreshed:",unit)
         except Exception as exc:
+            blocked+=1
             print("Projection blocked:",unit,type(exc).__name__)
-            raise
+    print("Units blocked:",blocked)
