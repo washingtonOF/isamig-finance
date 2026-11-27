@@ -2,14 +2,14 @@
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from google.cloud import firestore
-from resident_invoice_projection import project, payer_key
+from resident_invoice_projection import project, payer_key, RESIDENT_UNITS
 from cora_client import CoraClient
 from resident_payment_validation import valid_pix
 from finance_classification import classify_invoice
 import time
 
-def sync(db, auth, confirmed_from, month):
-    unit="102"
+def sync(db, auth, confirmed_from, month, unit="102"):
+    if unit not in RESIDENT_UNITS: raise ValueError("Invalid resident unit")
     accounts=list(db.collection("users").where("unit","==",unit).stream())
     approved=[s for s in accounts if s.to_dict().get("status")=="approved"]
     if len(approved)!=1: raise ValueError("Ambiguous account")
