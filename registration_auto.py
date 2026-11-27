@@ -47,9 +47,15 @@ def grant(tx, db, uid, email):
         return
     # Shared per-unit lock prevents concurrent automatic grants.
     lock = db.collection("registration_auto_locks").document(unit)
-    if lock.get(transaction=tx).exists:
-        return
-    tx.create(lock, {"uid":uid,"createdAt":firestore.SERVER_TIMESTAMP})
+    previous = lock.get(transaction=tx)
+    if previous.exists:
+        previous_uid = previous.to_dict().get("uid")
+        if not isinstance(previous_uid, str) or not previous_uid or "/" in previous_uid:
+            return
+        previous_account = db.collection("users").document(previous_uid).get(transaction=tx).to_dict() or {}
+        if previous_account.get("status") != "revoked" or previous_account.get("unit") != unit:
+            return
+    tx.set(lock, {"uid":uid,"createdAt":firestore.SERVER_TIMESTAMP})
     tx.create(decision_ref, {"decision":"approved","unit":unit,"decidedBy":"automatic_verified_existing_email","decidedAt":firestore.SERVER_TIMESTAMP})
     tx.update(account_ref, {"status":"approved","role":"resident","unit":unit})
 
