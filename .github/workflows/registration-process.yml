@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/registration-process.yml'
+      - 'registration_auto.py'
   schedule:
     - cron: '*/15 * * * *'
 permissions:
