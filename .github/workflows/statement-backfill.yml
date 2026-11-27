@@ -1,0 +1,45 @@
+name: Historical statement refresh
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/statement-backfill.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      CORA_ENV: production
+      CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+      CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
+      CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install 'google-cloud-firestore>=2.19,<3'
+      - run: |
+          set -eu
+          umask 077
+          d=$(mktemp -d)
+          trap 'rm -rf "$d"' EXIT
+          printf '%s\n' "$CORA_CERTIFICATE" > "$d/cert"
+          printf '%s\n' "$CORA_PRIVATE_KEY" > "$d/key"
+          export CORA_CERT_PATH="$d/cert" CORA_KEY_PATH="$d/key"
+          python - <<'PY'
+          import os,json
+          from google.cloud import firestore
+          from google.oauth2 import service_account
+          from cora_client import CoraClient
+          from statement_sync import sync_statement
+          try:
+              info=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+              if info.get("project_id")!="vinnas-del-mar-finance": raise ValueError("Wrong project")
+              db=firestore.Client(project=info["project_id"],credentials=service_account.Credentials.from_service_account_info(info))
+              sync_statement(db,CoraClient(),months=6)
+              print("Historical statement refresh completed")
+          except Exception as exc:
+              print("Refresh blocked:",type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
