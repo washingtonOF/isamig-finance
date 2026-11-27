@@ -124,22 +124,22 @@ service cloud.firestore {
   }
   match /unit_notices/{u}/messages/{id}/views/{uid} {
    allow get, list: if unitValid(u) && (master() || administrative() || own(u));
-   allow create: if unitValid(u) && own(u) && uid == request.auth.uid
+   allow create: if unitValid(u) && (own(u) || (master() && u == '204')) && uid == request.auth.uid
      && exists(/databases/$(database)/documents/unit_notices/$(u)/messages/$(id))
      && request.resource.data.keys().hasOnly(['viewedAt','uid','name'])
      && request.resource.data.keys().hasAll(['viewedAt','uid','name'])
      && request.resource.data.uid == uid && request.resource.data.viewedAt == request.time
-     && request.resource.data.name == get(/databases/$(database)/documents/users/$(uid)).data.name;
+     && ((master() && u == '204' && request.resource.data.name == request.auth.token.name) || (own(u) && request.resource.data.name == get(/databases/$(database)/documents/users/$(uid)).data.name));
    allow update, delete: if false;
   }
   match /unit_notices/{u}/messages/{id}/receipts/{uid} {
    allow get, list: if unitValid(u) && (master() || administrative() || own(u));
-   allow create: if unitValid(u) && own(u) && uid == request.auth.uid
+   allow create: if unitValid(u) && (own(u) || (master() && u == '204')) && uid == request.auth.uid
      && exists(/databases/$(database)/documents/unit_notices/$(u)/messages/$(id))
      && request.resource.data.keys().hasOnly(['confirmedAt','uid','name'])
      && request.resource.data.keys().hasAll(['confirmedAt','uid','name'])
      && request.resource.data.uid == uid && request.resource.data.confirmedAt == request.time
-     && request.resource.data.name == get(/databases/$(database)/documents/users/$(uid)).data.name;
+     && ((master() && u == '204' && request.resource.data.name == request.auth.token.name) || (own(u) && request.resource.data.name == get(/databases/$(database)/documents/users/$(uid)).data.name));
    allow update, delete: if false;
   }
   match /unit_notices/{u}/messages/{id} {
