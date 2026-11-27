@@ -36,7 +36,12 @@ def main():
         raise ValueError("Balance reconciliation required")
     print("Balance verified against statement ending balance in cents",flush=True)
     db=firestore.Client(project=info["project_id"],credentials=service_account.Credentials.from_service_account_info(info))
-    db.collection("finance_admin").document("current_balance").set({"balanceSchema":1,"balanceCents":cents,"source":"cora","updatedAt":firestore.SERVER_TIMESTAMP})
+    observed=datetime.now(ZoneInfo("America/Fortaleza"))
+    payload={"balanceSchema":1,"balanceCents":cents,"source":"cora","updatedAt":firestore.SERVER_TIMESTAMP}
+    batch=db.batch()
+    batch.set(db.collection("finance_admin").document("current_balance"),payload)
+    batch.set(db.collection("finance_admin").document("balance_day_"+observed.date().isoformat()),payload)
+    batch.commit()
     print("Balance synchronized successfully; values omitted.")
 if __name__=="__main__":
     try: main()
