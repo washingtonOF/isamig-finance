@@ -22,6 +22,7 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           CORA_ENV: production
+          CORA_CURRENT_ONLY: "1"
           CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
           CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
           CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
