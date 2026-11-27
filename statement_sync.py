@@ -4,7 +4,16 @@ from finance_pagination import collect_pages
 from google.cloud import firestore
 
 def sync_month(db, client, start, end, invoices, payers, links):
-    entries=collect_pages(client.statement,start,end,"entries",50)
+    boundaries=[]
+    def capture(start,end,page=1):
+        response=client.statement(start,end,page=page)
+        def balance(key):
+            obj=response.get(key) if isinstance(response,dict) else None
+            value=obj.get("balance") if isinstance(obj,dict) else None
+            return value if type(value) is int and abs(value)<=9007199254740991 else None
+        boundaries.append((balance("start"),balance("end")))
+        return response
+    entries=collect_pages(capture,start,end,"entries",50)
     rows=[]
     totals={"credit":0,"debit":0}
     for row in entries:
@@ -36,6 +45,11 @@ def sync_month(db, client, start, end, invoices, payers, links):
     print("Exact invoice matches:",matched,"of",len(rows))
     if len(rows)>700: raise ValueError("Document size guard")
     payload={"statementSchema":2,"statementCoverageStart":start,"statementCoverageEnd":end,"statementEntries":rows,"statementTotalsCents":totals,"statementUpdatedAt":firestore.SERVER_TIMESTAMP}
+    initial,final=boundaries[0]
+    consistent=initial is not None and final is not None and all(pair==(initial,final) for pair in boundaries)
+    calculated=initial+totals["credit"]-totals["debit"] if consistent else None
+    safe=consistent and all(abs(v)<=9007199254740991 for v in (totals["credit"],totals["debit"],calculated,calculated-final))
+    payload["reconciliation"]={"schema":1,"status":("matched" if calculated==final else "difference") if safe else "unavailable","openingCents":initial if safe else None,"closingCents":final if safe else None,"calculatedCents":calculated if safe else None,"differenceCents":calculated-final if safe else None,"coverageStart":start,"coverageEnd":end}
     db.collection("finance_admin").document(start[:7]).set(payload,merge=True)
     print("Statement mirror published:",len(rows))
 
