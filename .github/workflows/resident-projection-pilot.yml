@@ -57,3 +57,5 @@ jobs:
           PY
 
 # Refresh original boleto links for verified AP102 invoices.
+
+# Diagnose original boleto URL availability.
