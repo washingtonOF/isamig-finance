@@ -41,7 +41,7 @@ def sync(db, auth, confirmed_from, month):
         from urllib.parse import urlsplit
         parsed=urlsplit(url) if isinstance(url,str) else None
         print("Boleto URL present:", bool(url), "host:", parsed.hostname if parsed else None)
-        safe_url=url if parsed and parsed.scheme=="https" and parsed.hostname and (parsed.hostname=="cora.com.br" or parsed.hostname.endswith(".cora.com.br")) and not parsed.username and not parsed.password and parsed.port in (None,443) else None
+        safe_url=url if parsed and parsed.scheme=="https" and parsed.hostname and (parsed.hostname in ("cora.com.br","storage.googleapis.com") or parsed.hostname.endswith(".cora.com.br")) and not parsed.username and not parsed.password and parsed.port in (None,443) else None
         details[row["id"]]=(description,valid_pix(pix),detail.get("status"),detail.get("paid_at"),datetime.now(timezone.utc),pix,safe_url)
     print("Details checked:",len(details),"valid Pix:",sum(x[1] for x in details.values()))
     @firestore.transactional
