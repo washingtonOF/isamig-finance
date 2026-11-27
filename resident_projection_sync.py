@@ -44,6 +44,11 @@ def sync(db, auth, confirmed_from, month):
         links={s.id:s.to_dict() for s in db.collection("unit_payer_links").stream(transaction=transaction)}
         invoices=[s.to_dict() for s in db.collection("cora_invoice_private").where("payer","==",links[unit]["payer"]).stream(transaction=transaction)]
         payload=project(unit,uid,account,registry,links[unit],links,invoices,month,today,confirmed_from,True)
+        selected=[row for row in invoices if row.get("payer")==links[unit]["payer"] and str(row.get("due_date","")).startswith(month+"-") and row["due_date"]>=confirmed_from]
+        if len(selected)!=len(payload["invoices"]): raise ValueError("Projection mismatch")
+        for row, bill in zip(selected,payload["invoices"]):
+            if row["id"] not in details: raise ValueError("Missing detail")
+            bill["description"]=details[row["id"]][0]
         # No payment tokens are published until a freshness policy is implemented.
         payload["updatedAt"]=firestore.SERVER_TIMESTAMP
         transaction.set(db.collection("finance_units").document(unit).collection("months").document(month),payload)
