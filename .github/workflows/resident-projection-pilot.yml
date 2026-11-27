@@ -45,7 +45,7 @@ jobs:
           import os,json
           import firebase_admin
           from firebase_admin import credentials,auth,firestore
-          from resident_projection_sync import sync
+          from resident_projection_sync import sync_authorized_residents
           from datetime import datetime
           from zoneinfo import ZoneInfo
           try:
@@ -54,7 +54,7 @@ jobs:
                   raise ValueError("Wrong project")
               firebase_admin.initialize_app(credentials.Certificate(info))
               month=datetime.now(ZoneInfo("America/Fortaleza")).strftime("%Y-%m")
-              sync(firestore.client(),auth,"2026-11-01",month)
+              sync_authorized_residents(firestore.client(),auth,month)
               print("Pilot projection refreshed with unit mismatch quarantine.")
           except Exception as exc:
               print("Pilot blocked:",type(exc).__name__)
