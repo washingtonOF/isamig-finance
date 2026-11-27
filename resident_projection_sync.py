@@ -35,7 +35,12 @@ def sync(db, auth, confirmed_from, month):
         services=detail.get("services") or []
         description="; ".join(str(x.get("name",""))[:255] for x in services if isinstance(x,dict))[:500]
         pix=(detail.get("pix") or {}).get("emv")
-        details[row["id"]]=(description,valid_pix(pix),detail.get("status"),detail.get("paid_at"),datetime.now(timezone.utc),pix)
+        slip=((detail.get("payment_options") or {}).get("bank_slip") or {})
+        url=slip.get("url")
+        from urllib.parse import urlsplit
+        parsed=urlsplit(url) if isinstance(url,str) else None
+        safe_url=url if parsed and parsed.scheme=="https" and parsed.hostname and (parsed.hostname=="cora.com.br" or parsed.hostname.endswith(".cora.com.br")) and not parsed.username and not parsed.password and parsed.port in (None,443) else None
+        details[row["id"]]=(description,valid_pix(pix),detail.get("status"),detail.get("paid_at"),datetime.now(timezone.utc),pix,safe_url)
     print("Details checked:",len(details),"valid Pix:",sum(x[1] for x in details.values()))
     @firestore.transactional
     def write(transaction):
@@ -49,7 +54,7 @@ def sync(db, auth, confirmed_from, month):
         if len(selected)!=len(payload["invoices"]): raise ValueError("Projection mismatch")
         for row, bill in zip(selected,payload["invoices"]):
             if row["id"] not in details: raise ValueError("Missing detail")
-            description, pix_valid, status, paid_at, checked_at, pix = details[row["id"]]
+            description, pix_valid, status, paid_at, checked_at, pix, slip_url = details[row["id"]]
             bill["description"]=description
             if not isinstance(status,str): raise ValueError("Missing live status")
             category=classify_invoice(status,row["due_date"],today)
@@ -59,6 +64,9 @@ def sync(db, auth, confirmed_from, month):
                 bill["status"]=category
             bill["paidDate"]=str(paid_at or "")[:10] if category=="paid" else ""
             bill["bankCheckedAt"]=checked_at.isoformat()
+            if slip_url and status.upper() in ("OPEN","LATE","OVERDUE") and category in ("pending","overdue"):
+                bill["boletoUrl"]=slip_url
+                bill["boletoExpiresAt"]=(checked_at+timedelta(minutes=30)).isoformat()
             if pix_valid and status.upper() in ("OPEN","LATE","OVERDUE") and category in ("pending","overdue"):
                 bill["pixCode"]=pix
                 bill["pixExpiresAt"]=(checked_at+timedelta(minutes=30)).isoformat()
