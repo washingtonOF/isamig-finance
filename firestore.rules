@@ -126,7 +126,8 @@ service cloud.firestore {
    allow get, list: if unitValid(u) && (master() || administrative() || own(u));
    allow create: if unitValid(u) && (master() || administrative())
      && request.resource.data.keys().hasAll(['type','subject','body','date','createdBy','createdAt'])
-     && request.resource.data.keys().hasOnly(['type','subject','body','date','createdBy','createdAt','richBody'])
+     && request.resource.data.keys().hasOnly(['type','subject','body','date','createdBy','createdAt','richBody','signerName','signerRole'])
+     && ( !('signerName' in request.resource.data) && !('signerRole' in request.resource.data) || (request.resource.data.signerName is string && request.resource.data.signerName.size() > 0 && request.resource.data.signerName.size() <= 200 && ((master() && request.resource.data.signerRole == 'Master' && request.resource.data.signerName == request.auth.token.name) || (administrative() && request.resource.data.signerRole == 'Administrativo' && request.resource.data.signerName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name))))
      && (!('richBody' in request.resource.data) || (request.resource.data.richBody is string && request.resource.data.richBody.size() <= 60000))
      && request.resource.data.type in ['Comunicado','Notificação','Advertência','Convocação de assembleia','Declaração','Aviso de manutenção','Notificação de cobrança','Outros']
      && request.resource.data.subject is string && request.resource.data.subject.size() > 0 && request.resource.data.subject.size() <= 200
