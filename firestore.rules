@@ -36,17 +36,7 @@ service cloud.firestore {
   }
   match /registration_decisions/{uid} {
    allow get, list: if master();
-   allow create: if master()
-     && request.resource.data.keys().hasAll(['decision','unit','decidedBy','decidedAt'])
-     && request.resource.data.keys().hasOnly(['decision','unit','decidedBy','decidedAt'])
-     && exists(/databases/$(database)/documents/registration_review_private/$(uid))
-     && request.resource.data.decidedBy == request.auth.uid
-     && request.resource.data.decidedAt == request.time
-     && ((request.resource.data.decision == 'rejected' && request.resource.data.unit == '')
-       || (request.resource.data.decision == 'approved' && unitValid(request.resource.data.unit)
-       && request.resource.data.unit != '204'
-       && get(/databases/$(database)/documents/registration_review_private/$(uid)).data.result.status == 'matched'
-       && get(/databases/$(database)/documents/registration_review_private/$(uid)).data.result.unit == request.resource.data.unit));
+   allow create: if false;
    allow update, delete: if false;
   }
   match /registration_review_private/{uid} {
@@ -56,14 +46,13 @@ service cloud.firestore {
   match /users/{uid} {
    allow read: if master() || (verified() && request.auth.uid == uid);
    allow create: if verified() && request.auth.uid == uid && request.resource.data.keys().hasOnly(['email','name','role','status']) && request.resource.data.email == request.auth.token.email && request.resource.data.name is string && request.resource.data.role == 'user' && request.resource.data.status == 'pending';
-   allow update: if master() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unit','role','status']) && ((request.resource.data.status == 'approved' && validAssignment(request.resource.data)
-     && ((resource.data.status == 'approved' && resource.data.unit == request.resource.data.unit)
-       || (exists(/databases/$(database)/documents/registration_decisions/$(uid))
-       && get(/databases/$(database)/documents/registration_decisions/$(uid)).data.decision == 'approved'
-       && get(/databases/$(database)/documents/registration_decisions/$(uid)).data.unit == request.resource.data.unit))) || request.resource.data.status == 'revoked');
+   allow update: if master() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','status'])
+     && resource.data.status == 'approved'
+     && request.resource.data.unit == resource.data.unit
+     && ((request.resource.data.status == 'approved' && validAssignment(request.resource.data)) || (request.resource.data.status == 'revoked' && request.resource.data.role == resource.data.role));
    allow delete: if false;
   }
-  function approved() { return verified() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved' && validAssignment(get(/databases/$(database)/documents/users/$(request.auth.uid)).data); }
+  function approved() { return verified() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.email == request.auth.token.email && validAssignment(get(/databases/$(database)/documents/users/$(request.auth.uid)).data); }
   function administrative() { return approved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'administrative'; }
   function own(u) { return approved() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.unit == u; }
   function validResident(d) { return d.keys().hasAll(['owner','responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt']) && d.keys().hasOnly(['owner','responsible','cpf','phone','email','occupation','count','start','updatedBy','updatedAt']) && d.owner is string && d.owner.size() <= 150 && d.responsible is string && d.responsible.size() <= 150 && d.cpf is string && d.cpf.size() <= 14 && d.phone is string && d.phone.size() <= 30 && d.email is string && d.email.size() <= 254 && d.occupation in ['Não informado','Proprietário residente','Inquilino','Cedido','Desocupado'] && d.count is int && d.count >= 0 && d.count <= 100 && d.start is string && d.start.size() <= 10 && d.updatedBy == request.auth.uid && d.updatedAt == request.time; }
@@ -74,7 +63,7 @@ service cloud.firestore {
   match /test_access/{uid} {
    allow get: if master() || (verified() && request.auth.uid == uid);
    allow list: if master();
-   allow create, update: if master() && uid != request.auth.uid
+   allow update: if master() && resource.data.status == 'approved' && request.resource.data.status == 'revoked' && uid != request.auth.uid
      && request.resource.data.keys().hasOnly(['unit','status','updatedBy','updatedAt'])
      && request.resource.data.unit == '107'
      && request.resource.data.status in ['approved','revoked']
@@ -96,8 +85,8 @@ service cloud.firestore {
   match /residents/{u} {
    allow get: if unitValid(u) && (master() || administrative() || own(u));
    allow list: if master() || administrative();
-   allow create: if unitValid(u) && (master() || administrative()) && validResident(request.resource.data);
-   allow update: if unitValid(u) && validResident(request.resource.data) && (master() || administrative() || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
+   allow create: if unitValid(u) && master() && validResident(request.resource.data);
+   allow update: if unitValid(u) && validResident(request.resource.data) && (master() || (administrative() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','occupation','count','start','updatedBy','updatedAt'])) || (own(u) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','updatedBy','updatedAt'])));
    allow delete: if false;
   }
   match /unit_access_preferences/{u} {
