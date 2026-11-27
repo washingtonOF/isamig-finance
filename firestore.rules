@@ -106,6 +106,10 @@ service cloud.firestore {
    allow delete: if false;
   }
   // Financial projections are written only by the trusted server identity (IAM).
+  match /cora_invoice_private/{invoice} {
+   allow get, list: if master();
+   allow write: if false;
+  }
   match /finance_admin/{period} {
    allow get: if master() || administrative();
    allow list, write: if false;
