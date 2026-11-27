@@ -1,0 +1,99 @@
+name: Unit 404 direct Pix settlement
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/pix-404-settlement.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      CORA_ENV: production
+      CORA_CLIENT_ID: ${{ secrets.CORA_CLIENT_ID }}
+      CORA_CERTIFICATE: ${{ secrets.CORA_CERTIFICATE }}
+      CORA_PRIVATE_KEY: ${{ secrets.CORA_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install 'google-cloud-firestore>=2.19,<3'
+      - run: |
+          set -eu
+          umask 077
+          d=$(mktemp -d)
+          trap 'rm -rf "$d"' EXIT
+          printf '%s\n' "$CORA_CERTIFICATE" > "$d/cert"
+          printf '%s\n' "$CORA_PRIVATE_KEY" > "$d/key"
+          export CORA_CERT_PATH="$d/cert" CORA_KEY_PATH="$d/key"
+          python - <<'PY'
+          from cora_client import CoraClient
+          from finance_pagination import collect_pages
+          from datetime import date,timedelta,datetime
+          from zoneinfo import ZoneInfo
+          from google.cloud import firestore
+          from google.oauth2 import service_account
+          import os,json,unicodedata,hashlib
+          def norm(s):
+              return " ".join("".join(c for c in unicodedata.normalize("NFD",s.casefold()) if not unicodedata.combining(c)).split())
+          try:
+              info=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+              if info.get("project_id")!="vinnas-del-mar-finance": raise ValueError("Wrong project")
+              db=firestore.Client(project=info["project_id"],credentials=service_account.Credentials.from_service_account_info(info))
+              client=CoraClient()
+              link=db.collection("unit_payer_links").document("404").get().to_dict() or {}
+              payer=link.get("payer")
+              if not payer: raise ValueError("Missing unit link")
+              invoices=[s.to_dict() for s in db.collection("cora_invoice_private").where("payer","==",payer).stream()]
+              pending=[]
+              for month in range(6,12):
+                  start=date(2026,month,1)
+                  stop=min(date(2026,11,27),(start.replace(day=28)+timedelta(days=4)).replace(day=1)-timedelta(days=1))
+                  period=start.strftime("%Y-%m")
+                  rows=collect_pages(client.statement,start.isoformat(),stop.isoformat(),"entries",50)
+                  matches=[]
+                  for r in rows:
+                      t=r.get("transaction",{})
+                      p=t.get("counterParty") or {}
+                      if r.get("type")=="CREDIT" and t.get("type")=="PIX" and r.get("amount")==25000 and isinstance(p.get("name"),str) and norm(p["name"])=="maria f holanda rebonatto" and not any(x in norm(str(t.get("description",""))) for x in ("md06","estorno","devolucao","refund","reversal")):
+                          matches.append(r)
+                  if len(matches)!=1: raise ValueError("Ambiguous bank receipt")
+                  r=matches[0]
+                  stamp=datetime.fromisoformat(r["createdAt"].replace("Z","+00:00"))
+                  if stamp.tzinfo is None: raise ValueError("Missing timezone")
+                  day=stamp.astimezone(ZoneInfo("America/Fortaleza")).date()
+                  if day.strftime("%Y-%m")!=period: raise ValueError("Wrong month")
+                  bills=[i for i in invoices if str(i.get("due_date","")).startswith(period+"-") and i.get("total_amount")==25000]
+                  if len(bills)!=1:
+                      print("Blocked month",period,"matching invoices",len(bills))
+                      continue
+                  bill=bills[0]
+                  detail=client.invoice_details(bill["id"])
+                  if detail.get("id")!=bill["id"] or str(detail.get("status","")).upper() not in ("OPEN","PENDING","LATE","OVERDUE"):
+                      print("Blocked month",period,"invoice not confirmed open")
+                      continue
+                  services=detail.get("services") or []
+                  import re
+                  desc=" ".join(str(s.get("name","")) for s in services if isinstance(s,dict))
+                  if not re.search(r"condomin",norm(desc)) or set(re.findall(r"\b(?:unidade|apartamento|ap|apto)\s*[:#.-]?\s*(\d{3})\b",norm(desc)))!={"404"}:
+                      print("Blocked month",period,"invoice purpose or unit not verified")
+                      continue
+                  key=hashlib.sha256(r["id"].encode()).hexdigest()
+                  pending.append((period,key,{"schema":1,"unit":"404","period":period,"amountCents":25000,"paidDate":day.isoformat(),"source":"cora_direct_pix","status":"paid","invoiceId":bill["id"],"receiptKey":key,"updatedAt":firestore.SERVER_TIMESTAMP}))
+              for period,key,payload in pending:
+                  ref=db.collection("finance_admin").document("direct_pix_404_"+period)
+                  @firestore.transactional
+                  def write(tx):
+                      old=ref.get(transaction=tx).to_dict()
+                      if old:
+                          if old.get("receiptKey")!=key or old.get("invoiceId")!=payload["invoiceId"]: raise ValueError("Conflicting settlement")
+                          return
+                      tx.create(ref,payload)
+                  write(db.transaction())
+                  print("Internal settlement recorded",period)
+              print("Settlements verified",len(pending))
+          except Exception as exc:
+              print("Settlement blocked:",type(exc).__name__)
+              raise SystemExit(1) from None
+          PY
